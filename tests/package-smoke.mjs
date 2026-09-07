@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import assert from 'node:assert/strict';
+import {demoProjects} from '../ui/demo.js';
 const env={...process.env,PIPELINE_DESK_PROFILE:await fs.mkdtemp(path.join(os.tmpdir(),'pipeline-desk-packaged-')),PIPELINE_DESK_TEST:'1'};
 delete env.ELECTRON_RUN_AS_NODE;
 const app=await electron.launch({executablePath:path.resolve('release/PipelineDesk-win32-x64/PipelineDesk.exe'),args:[],env});
@@ -24,5 +25,13 @@ try{
   const groupOpened=app.waitForEvent('window');await page.evaluate(()=>window.desk.openWidget('demo-group-platform'));
   const group=await groupOpened;await group.locator('.pipeline-stage-block').first().waitFor();
   assert.equal(await group.locator('.stage').count(),8);
-  console.log('PASS: packaged Windows EXE, sandboxed preload, demo overview, native widget, three views, default group stages.');
+  const projects=demoProjects(),key='demo-group-platform';
+  await app.evaluate(({BrowserWindow},snapshot)=>{
+    BrowserWindow.getAllWindows().find(w=>new URL(w.webContents.getURL()).searchParams.get('widget')===snapshot.groups[0].key).webContents.send('desk:update',snapshot);
+  },{connected:true,projects,groups:[{key,name:'Six projects',memberKeys:projects.map(p=>p.key),sources:[]}],widgets:[key],widgetOptions:{[key]:{view:'full'}},interval:15000});
+  await group.locator('.pipeline-card').first().waitFor();
+  assert.equal(await group.locator('.pipeline-card').count(),6);
+  assert.equal(await group.locator('.pipeline-card').evaluateAll(cards=>cards.every(card=>card.querySelector('.card-bottom').getBoundingClientRect().bottom<=card.getBoundingClientRect().bottom+1)),true,'Packaged detailed cards must not clip their content');
+  assert.equal(await group.locator('.group-body').evaluate(el=>el.scrollHeight>el.clientHeight),true);
+  console.log('PASS: packaged Windows EXE, sandboxed preload, native widget, three views, six detailed cards without clipping.');
 }finally{await app.close();}

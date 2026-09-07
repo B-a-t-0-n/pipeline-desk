@@ -60,6 +60,7 @@ npm run test:ui
 node tests/setup.mjs
 node tests/groups-ui.mjs
 node tests/widget-views.mjs
+node tests/full-group-layout.mjs
 npm run package
 npm run preview
 ```
