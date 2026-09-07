@@ -1,0 +1,20 @@
+{
+  "name": "pipeline-desk",
+  "productName": "Pipeline Desk",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Компактные виджеты GitLab для рабочего стола",
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "preview": "node scripts/preview.mjs",
+    "test": "node --test tests/*.test.cjs",
+    "test:ui": "node tests/ui.mjs",
+    "package": "electron-packager . PipelineDesk --platform=win32 --arch=x64 --out=release --overwrite --asar --icon=assets/icon.ico --ignore=\"^/(tests|scripts|release|.impeccable|Pipeline Desk.lnk)\""
+  },
+  "devDependencies": {
+    "electron": "44.2.0",
+    "@electron/packager": "20.3.0",
+    "@playwright/test": "1.63.0"
+  }
+}

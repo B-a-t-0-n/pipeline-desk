@@ -1,0 +1,5 @@
+{
+  "icon.svg": { "origin": "Original geometric pipeline mark authored in this workspace; three connected nodes, no external assets." },
+  "icon.png": { "origin": "Deterministic rasterization of icon.svg using sharp." },
+  "icon.ico": { "origin": "Windows icon sizes derived from icon.png using Pillow." }
+}

@@ -1,0 +1,13 @@
+node_modules/
+release/
+.test-profile/
+*.log
+.impeccable/
+*.lnk
+.netrc
+_netrc
+.env
+.env.*
+!.env.example
+settings.json
+settings.json.*

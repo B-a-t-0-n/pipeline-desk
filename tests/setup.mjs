@@ -1,0 +1,114 @@
+import {_electron as electron,chromium} from 'playwright';
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import os from 'node:os';
+const root=path.resolve('.');
+const profile=await fs.mkdtemp(path.join(os.tmpdir(),'pipeline-desk-setup-'));
+const netrcPath=path.join(profile,'.netrc');
+const shots=path.join(root,'.impeccable/review');
+await fs.mkdir(shots,{recursive:true});
+await fs.writeFile(netrcPath,'machine git.example.invalid login test password invalid-fixture');
+await fs.writeFile(path.join(profile,'settings.json'),JSON.stringify({host:'https://git.example.invalid',projects:[],widgets:{},netrcPath,netrcFailed:true}));
+const env={...process.env,PIPELINE_DESK_PROFILE:profile,PIPELINE_DESK_TEST:'1'};delete env.ELECTRON_RUN_AS_NODE;
+let app,browser;
+const errors=[];
+try{
+  app=await electron.launch({args:[root],env});
+  const page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));
+  await page.locator('.pipeline-card').first().waitFor();
+  await app.evaluate(({shell})=>{
+    globalThis.openedUrls=[];shell.openExternal=async url=>{globalThis.openedUrls.push(url);};
+    globalThis.apiCalls=[];
+    globalThis.fetch=async(url,options)=>{
+      const u=new URL(url);globalThis.apiCalls.push(u.pathname);
+      if(options.headers['PRIVATE-TOKEN']!=='fixture-pat')return new Response('{}',{status:401});
+      const project=id=>({id,path:id===42?'supply-demand-backend':id===43?'supply-demand-frontend':'platform-tools',namespace:{full_path:'AEDON / supply-demand-platform'},web_url:`https://git.example.invalid/group/${id}`});
+      let body,headers={};
+      if(u.pathname.endsWith('/user'))body={username:'fixture-user'};
+      else if(u.pathname.endsWith('/projects')){
+        const search=u.searchParams.get('search');
+        if(search==='missing')body=[];
+        else if(search==='frontend')body=[project(43)];
+        else if(u.searchParams.get('page')==='2')body=[project(44)];
+        else{body=[project(42),project(43)];headers={'x-next-page':'2'};}
+      }else if(/\/projects\/\d+$/.test(u.pathname))body=project(Number(u.pathname.split('/').at(-1)));
+      else if(u.pathname.endsWith('/pipelines'))body=[{id:99,status:'success'}];
+      else if(u.pathname.endsWith('/pipelines/99'))body={id:99,status:'success',ref:'main',sha:'abcdef',duration:42};
+      else if(u.pathname.endsWith('/jobs'))body=[{id:1,name:'test',stage:'test',status:'success'}];
+      else if(u.pathname.endsWith('/bridges'))body=[];
+      else return new Response('{}',{status:404});
+      return new Response(JSON.stringify(body),{headers});
+    };
+  });
+  // A previously rejected file must not trigger more login attempts on startup.
+  assert.deepEqual(await app.evaluate(()=>globalThis.apiCalls),[]);
+  await page.locator('#settings-button').click();
+  assert.equal(await page.locator('#settings-dialog input:visible').count(),1);
+  assert.equal(await page.locator('#host-input').inputValue(),'https://git.example.invalid');
+  await page.screenshot({path:path.join(shots,'setup.png')});
+  await page.locator('#create-token-button').click();
+  const tokenUrl=new URL((await app.evaluate(()=>globalThis.openedUrls))[0]);
+  assert.equal(tokenUrl.origin,'https://git.example.invalid');
+  assert.equal(tokenUrl.searchParams.get('scopes'),'read_api');
+  assert.equal(tokenUrl.searchParams.get('name'),'Pipeline Desk');
+  await page.locator('#netrc-button').click();
+  await page.locator('#settings-error').filter({hasText:'Данные .netrc не подошли'}).waitFor();
+  assert.equal(await page.locator('#token-input').getAttribute('aria-invalid'),'true');
+  // The explicit retry reads the updated file, without requiring its path or contents in the UI.
+  await fs.writeFile(netrcPath,'machine git.example.invalid login test password fixture-pat');
+  await page.locator('#netrc-button').click();
+  await page.locator('#add-dialog').waitFor({state:'visible'});
+  await page.locator('#catalog-items input[value="42"]').check();
+  await page.locator('#more-projects').click();
+  await page.locator('#catalog-items input[value="44"]').waitFor();
+  assert.equal(await page.locator('#catalog-items input').count(),3);
+  await page.screenshot({path:path.join(shots,'project-picker.png')});
+  await page.locator('#project-search').fill('frontend');
+  await page.waitForFunction(()=>document.querySelectorAll('#catalog-items input').length===1);
+  await page.locator('#catalog-items input[value="43"]').check();
+  assert.equal(await page.locator('#add-form button[type="submit"]').textContent(),'Добавить · 2');
+  await page.locator('#add-form button[type="submit"]').click();
+  await page.locator('.pipeline-card[data-project="42:"][data-status="success"]').waitFor();
+  assert.equal(await page.locator('.pipeline-card').count(),2);
+  await page.locator('#add-button').click();
+  await page.locator('#catalog-items input[value="42"]').waitFor();
+  assert.equal(await page.locator('#catalog-items input[value="42"]').isDisabled(),true);
+  await page.locator('#project-search').fill('missing');
+  await page.locator('#catalog-status').filter({hasText:'Проекты не найдены'}).waitFor();
+  await page.keyboard.press('Escape');
+  const saved=await fs.readFile(path.join(profile,'settings.json'),'utf8');
+  assert.equal(saved.includes('fixture-pat'),false);
+  assert.deepEqual(JSON.parse(saved).projects.map(p=>p.id),[42,43]);
+  assert.equal(JSON.parse(saved).netrcFailed,false);
+  const snapshot=await page.evaluate(()=>window.desk.snapshot());
+  assert.equal('token' in snapshot,false);assert.equal('netrcPath' in snapshot,false);
+  await app.close();app=null;
+  app=await electron.launch({args:[root],env});
+  const restored=await app.firstWindow();
+  await restored.locator('.pipeline-card[data-project="42:"]').waitFor();
+  assert.equal(await restored.evaluate(async()=>(await window.desk.snapshot()).connected),true);
+  await restored.locator('#settings-button').click();
+  assert.equal(await restored.locator('#token-input').inputValue(),'');
+  assert.equal(await restored.locator('#token-input').evaluate(el=>el.required),false);
+  await restored.locator('#disconnect-button').click();
+  assert.equal(JSON.parse(await fs.readFile(path.join(profile,'settings.json'),'utf8')).netrcAuto,false);
+  await app.close();app=null;
+  // Narrow rendering uses the same production files with a non-secret preview bridge.
+  browser=await chromium.launch({channel:'msedge',headless:true});
+  const narrow=await browser.newPage({viewport:{width:390,height:844}});
+  await narrow.addInitScript(()=>{
+    const state={connected:true,host:'https://git.example.invalid',projects:[],widgets:[],interval:15000};
+    window.desk={snapshot:async()=>state,onUpdate:()=>{},listProjects:async()=>({items:[{id:42,name:'supply-demand-backend',namespace:'AEDON / supply-demand-platform'},{id:43,name:'supply-demand-frontend-with-a-long-name',namespace:'AEDON / supply-demand-platform'}],nextPage:null})};
+  });
+  await narrow.goto('http://127.0.0.1:4317/ui/index.html');
+  await narrow.locator('#connection-button').click();
+  await narrow.screenshot({path:path.join(shots,'setup-narrow.png'),animations:'disabled'});
+  await narrow.keyboard.press('Escape');await narrow.locator('#add-button').click();
+  await narrow.locator('#catalog-items input[value="42"]').check();
+  await narrow.screenshot({path:path.join(shots,'project-picker-narrow.png'),animations:'disabled'});
+  assert.equal(await narrow.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+  assert.equal(await narrow.locator('#add-dialog').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
+  assert.deepEqual(errors,[]);
+  console.log('PASS: one input, prefilled server/token link, .netrc retry, encrypted persistence, automatic saved login, catalog pagination/search/multi-select, no credential exposure, narrow setup and picker.');
+}finally{if(app)await app.close().catch(()=>{});if(browser)await browser.close();}

@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="color-scheme" content="dark light">
+  <title>Pipeline Desk</title>
+  <link rel="icon" href="../assets/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="setup.css">
+  <link rel="stylesheet" href="groups.css">
+  <script src="app.js" type="module"></script>
+</head>
+<body>
+<!-- THESIS: A glanceable Windows instrument for current GitLab pipelines, with no explanatory dashboard chrome.
+OWN-WORLD: Graphite working surface, pale text, blue running nodes, green completion, coral failures; Segoe UI with tabular measurements.
+STORY: Scan project and status, read the stage path, detach a widget, return to work.
+FIRST VIEWPORT: Quiet native titlebar, one compact toolbar and six 3-column pipeline widgets; connected stage nodes are the visual center, pin is one click away. Signature: the active stage carries a traveling stroke.
+FORM: Brief-pinned minimalist desktop instrument; seed 7eddc8d7, candidate 5 superseded by explicit user minimalism. Code-led implementation.
+FINISH: unreviewed and undocumented is unfinished; this build ends with the finish review, the verdict, DESIGN.md, and every shipping raster carrying its provenance -->
+  <header class="titlebar">
+    <div class="app-brand"><span id="app-symbol"></span><span>Pipeline <b>Desk</b></span></div>
+    <div class="window-controls">
+      <button class="icon-button" id="theme-button" aria-label="Светлая тема" title="Сменить тему"></button>
+      <button class="icon-button native-control" data-window="minimize" aria-label="Свернуть"></button>
+      <button class="icon-button native-control close-window" data-window="close" aria-label="Скрыть в трей"></button>
+    </div>
+  </header>
+  <main id="overview">
+    <section class="heading-row">
+      <div class="page-heading"><h1>Пайплайны<span class="project-total" id="project-total">6</span></h1><button id="connection-button" class="connection-button"><span class="connection-dot"></span><span id="connection-label">Демо</span><span data-icon="chevronDown"></span></button></div>
+      <div class="heading-actions"><button class="icon-button" id="settings-button" aria-label="Настройки" title="Настройки"></button><button class="primary-button" id="add-button"><span data-icon="plus"></span>Добавить проект</button></div>
+    </section>
+    <nav class="collection-bar" aria-label="Группы проектов"><div id="collection-tabs" class="collection-tabs"></div><button id="new-group-button" class="text-button"><span data-icon="plus"></span>Группа</button></nav>
+    <div id="collection-context" class="collection-context" hidden></div>
+    <section class="toolbar" aria-label="Фильтры пайплайнов">
+      <div class="filters" role="group" aria-label="Статус">
+        <button class="filter active" data-filter="all" aria-pressed="true">Все<span id="count-all">6</span></button>
+        <button class="filter" data-filter="active" aria-pressed="false"><i class="status-dot running"></i>В работе<span id="count-active">2</span></button>
+        <button class="filter" data-filter="failed" aria-pressed="false"><i class="status-dot failed"></i>Ошибки<span id="count-failed">1</span></button>
+      </div>
+      <div class="view-tools"><button class="icon-button" id="refresh-button" aria-label="Обновить" title="Обновить"></button><div class="view-switch" role="group" aria-label="Вид"><button class="icon-button selected" data-view="grid" aria-pressed="true" aria-label="Карточки" title="Карточки"></button><button class="icon-button" data-view="list" aria-pressed="false" aria-label="Список" title="Список"></button><button class="icon-button" data-view="compact" aria-pressed="false" aria-label="Компактный вид" title="Компактный вид"></button></div></div>
+    </section>
+    <div id="global-error" class="global-error" role="alert" hidden></div>
+    <section id="projects" class="projects" aria-label="Проекты"></section>
+    <footer class="app-footer"><div><span class="live-dot"></span><span id="sync-label">Демонстрационные данные</span></div><button id="footer-connect">Подключить GitLab<span data-icon="arrowRight"></span></button></footer>
+  </main>
+  <main id="widget" hidden></main>
+  <dialog id="settings-dialog" closedby="closerequest" aria-labelledby="settings-title">
+    <form id="settings-form" method="post">
+      <div class="dialog-heading"><h2 id="settings-title">Подключение GitLab</h2><button type="button" class="icon-button" data-close aria-label="Закрыть" data-icon="x"></button></div>
+      <div class="server-choice"><span data-icon="repo"></span><span id="server-name"></span><button type="button" class="text-button" id="edit-server" aria-expanded="false" aria-controls="host-field">Изменить</button></div>
+      <div id="host-field" class="form-field" hidden><label for="host-input">Адрес GitLab</label><input id="host-input" name="host" type="url" placeholder="https://gitlab.example.com" required autocomplete="url" spellcheck="false"></div>
+      <div class="token-label"><label for="token-input">Токен</label><button type="button" class="text-button" id="create-token-button">Получить токен<span data-icon="external"></span></button></div>
+      <input id="token-input" name="token" type="password" placeholder="Вставьте токен один раз" autocomplete="off" spellcheck="false" aria-describedby="credential-note settings-error">
+      <p class="field-note" id="credential-note">Сохраним автоматически. Повторный ввод не нужен.</p>
+      <button type="button" class="secondary-button netrc-button" id="netrc-button" hidden><span data-icon="refresh"></span><span id="netrc-label">Использовать .netrc</span></button>
+      <details class="setup-details"><summary>Дополнительно</summary><div class="setting-row"><label for="interval-input">Обновление</label><select id="interval-input" name="interval"><option value="15000">Каждые 15 сек.</option><option value="30000">Каждые 30 сек.</option><option value="60000">Каждую минуту</option></select></div></details>
+      <p class="form-error" role="alert" id="settings-error"></p>
+      <div class="dialog-actions"><button type="button" class="text-button danger-text" id="disconnect-button" hidden>Отключить</button><button class="primary-button" id="connect-submit" type="submit">Подключить</button></div>
+    </form>
+  </dialog>
+  <dialog id="add-dialog" closedby="closerequest" class="project-picker-dialog" aria-labelledby="add-title">
+    <form id="add-form">
+      <div class="dialog-heading"><h2 id="add-title">Ваши проекты</h2><button type="button" class="icon-button" data-close data-icon="x" aria-label="Закрыть"></button></div>
+      <div class="picker-modes" role="group" aria-label="Как добавить проект"><button type="button" class="filter active" data-picker-mode="list" aria-pressed="true">Из списка</button><button type="button" class="filter" data-picker-mode="manual" aria-pressed="false">По ссылке</button></div>
+      <div id="project-catalog"><label class="search-label" for="project-search">Найти проект</label><input id="project-search" name="search" type="search" placeholder="Название проекта" autocomplete="off" maxlength="200"><p id="catalog-status" class="catalog-status" role="status"></p><div id="catalog-items" class="catalog-items" role="group" aria-label="Доступные проекты"></div><button type="button" class="text-button more-projects" id="more-projects" hidden>Показать ещё</button></div>
+      <div id="manual-project" hidden><label for="project-input">Проект</label><input id="project-input" name="project" placeholder="group/project или ссылка GitLab" spellcheck="false" autocomplete="off"><label for="branch-input">Ветка <span>необязательно</span></label><input id="branch-input" name="branch" placeholder="Любая ветка" spellcheck="false" autocomplete="off"><p class="field-note">Последний пайплайн обновляется автоматически.</p></div>
+      <p class="form-error" role="alert" id="add-error"></p>
+      <div class="dialog-actions"><button type="button" class="secondary-button" data-close>Отмена</button><button class="primary-button" type="submit">Добавить</button></div>
+    </form>
+  </dialog>
+  <dialog id="detail-dialog" closedby="closerequest" class="detail-dialog" aria-labelledby="detail-title"><div id="detail-content"></div></dialog>
+  <dialog id="group-dialog" closedby="closerequest" class="project-picker-dialog" aria-labelledby="group-title">
+    <form id="group-form" method="post">
+      <div class="dialog-heading"><h2 id="group-title">Новая группа</h2><button type="button" class="icon-button" data-close data-icon="x" aria-label="Закрыть"></button></div>
+      <label for="group-name">Название <span>необязательно</span></label><input id="group-name" name="name" maxlength="100" placeholder="Например, Рабочие проекты" autocomplete="off">
+      <div class="picker-modes group-modes" role="group" aria-label="Состав группы"><button type="button" class="filter active" data-group-mode="projects" aria-pressed="true">Проекты</button><button type="button" class="filter" data-group-mode="gitlab" aria-pressed="false">Группы GitLab</button><button type="button" class="filter" data-group-mode="local" aria-pressed="false">Мои группы</button></div>
+      <label class="search-label" for="group-search">Поиск</label><input id="group-search" name="search" type="search" maxlength="200" placeholder="Название или путь" autocomplete="off">
+      <label class="subgroup-option" id="subgroup-option" hidden><input type="checkbox" name="includeSubgroups" id="include-subgroups" checked>Включая подгруппы</label>
+      <p class="catalog-status" id="group-catalog-status" role="status"></p><div id="group-catalog" class="catalog-items" role="group" aria-label="Доступные проекты и группы"></div>
+      <button type="button" class="text-button more-projects" id="group-more" hidden>Показать ещё</button>
+      <p id="group-selection" class="field-note" role="status"></p><p id="group-error" class="form-error" role="alert"></p>
+      <div class="dialog-actions"><button type="button" class="text-button danger-text" id="delete-group" hidden>Удалить группу</button><button type="button" class="secondary-button" data-close>Отмена</button><button type="submit" class="primary-button" id="save-group">Создать</button></div>
+    </form>
+  </dialog>
+  <div class="toast" id="toast" role="status"></div>
+</body>
+</html>
