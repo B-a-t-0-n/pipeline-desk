@@ -1,4 +1,4 @@
-import {_electron as electron} from 'playwright';
+import {launchElectron,overviewPage} from './electron.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -12,8 +12,8 @@ const env={...process.env,PIPELINE_DESK_PROFILE:profile,PIPELINE_DESK_TEST:'1'};
 let app;
 const errors=[];
 async function launch(){
-  app=await electron.launch({args:[root],env});
-  const page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));
+  app=await launchElectron({args:[root],env});
+  const page=await overviewPage(app);page.on('pageerror',e=>errors.push(e.message));
   await page.locator('.pipeline-card').first().waitFor();return page;
 }
 try{

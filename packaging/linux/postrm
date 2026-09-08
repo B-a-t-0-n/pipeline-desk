@@ -1,0 +1,10 @@
+#!/bin/sh
+set -eu
+if [ "$1" = remove ] || [ "$1" = purge ]; then
+  if [ -x /sbin/apparmor_parser ] && [ -d /sys/kernel/security/apparmor ] && [ -f /etc/apparmor.d/pipeline-desk ]; then
+    /sbin/apparmor_parser -R /etc/apparmor.d/pipeline-desk || true
+  fi
+  if command -v update-desktop-database >/dev/null 2>&1; then
+    update-desktop-database -q /usr/share/applications
+  fi
+fi

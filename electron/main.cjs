@@ -5,7 +5,11 @@ const {normalizeHost,parseProject,createClient} = require('./gitlab.cjs');
 const {readNetrc} = require('./netrc.cjs');
 const {createGroupService,groupProjectKeys}=require('./groups.cjs');
 const {openConfigStore}=require('./storage.cjs');
+const {configurePlatform,windowIcon,dismissOverview,restoreOverview}=require('./platform.cjs');
+const {createTokenVault}=require('./credentials.cjs');
 
+configurePlatform(app);
+const tokenVault=createTokenVault(safeStorage);
 if (process.env.PIPELINE_DESK_PROFILE) app.setPath('userData', process.env.PIPELINE_DESK_PROFILE);
 const single = app.requestSingleInstanceLock();
 if (!single) app.quit();
@@ -37,7 +41,7 @@ async function persist(next = config) {
   store.save(next);
 }
 function snapshot() {
-  return {desktop:true,connected:!!token,host:config.host,username:config.username,interval:config.interval,updating:!!refreshing,lastUpdate,error:startupError,netrcAvailable:!!config.netrcPath,netrcFailed:!!config.netrcFailed,
+  return {desktop:true,platform:process.platform,connected:!!token,host:config.host,username:config.username,interval:config.interval,updating:!!refreshing,lastUpdate,error:startupError,netrcAvailable:!!config.netrcPath,netrcFailed:!!config.netrcFailed,
     projects:config.projects.map(p => ({...p,...data.get(p.key),pinned:widgets.has(p.key)})),groups:config.groups.map(g=>({...g,memberKeys:groupProjectKeys(g),pinned:widgets.has(g.key),error:g.sources.find(s=>s.error)?.error||null})),widgets:[...widgets.keys()],widgetOptions:Object.fromEntries([...widgets.keys()].map(key=>[key,{compact:isCompact(key),view:widgetView(key)}]))};
 }
 function broadcast() { for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('desk:update',snapshot()); }
@@ -72,7 +76,7 @@ function visibleBounds(saved,width,height) {
 function createWindow(key) {
   const widget = !!key;
   const group=isGroupKey(key),view=widgetView(key);
-  const w = new BrowserWindow({...visibleBounds(widget?config.widgets[key]?.bounds:config.bounds,widget?(group?440:388):1100,widget?widgetHeight(key,view):790),minWidth:widget?330:660,minHeight:widget?widgetMinHeight(key,view):500,show:false,frame:false,backgroundColor:'#141619',title:widget?'Pipeline Desk · Widget':'Pipeline Desk',icon:path.join(__dirname,'../assets/icon.ico'),alwaysOnTop:widget?config.widgets[key]?.pinned!==false:false,autoHideMenuBar:true,
+  const w = new BrowserWindow({...visibleBounds(widget?config.widgets[key]?.bounds:config.bounds,widget?(group?440:388):1100,widget?widgetHeight(key,view):790),minWidth:widget?330:660,minHeight:widget?widgetMinHeight(key,view):500,show:false,frame:false,backgroundColor:'#141619',title:widget?'Pipeline Desk · Widget':'Pipeline Desk',icon:windowIcon(__dirname),alwaysOnTop:widget?config.widgets[key]?.pinned!==false:false,autoHideMenuBar:true,
     webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
   w.webContents.setWindowOpenHandler(() => ({action:'deny'}));
   w.webContents.on('will-navigate',e => e.preventDefault());
@@ -91,10 +95,14 @@ function createWindow(key) {
   };
   w.on('move',saveBounds);w.on('resize',saveBounds);
   w.on('closed',() => {clearTimeout(saveTimer);if(widget){widgets.delete(key);broadcast();}});
-  if(!widget) w.on('close',event => {if(!quitting){event.preventDefault();w.hide();}});
+  w.on('close',event => {
+    if(quitting)return;
+    if(widget){config.widgets[key]={...config.widgets[key],open:false};persist().catch(()=>{});}
+    else{event.preventDefault();dismissOverview(w);}
+  });
   return w;
 }
-function showOverview() { if(!overview || overview.isDestroyed()) overview=createWindow(); overview.show();overview.focus(); }
+function showOverview() { if(!overview || overview.isDestroyed()) overview=createWindow(); restoreOverview(overview); }
 function openWidget(key) {
   if(!config.projects.some(p => p.key===key)&&!config.groups.some(g=>g.key===key) && !(key?.startsWith('demo-') && !token)) throw new Error('Проект или группа не найдены.');
   if(widgets.has(key)){widgets.get(key).show();widgets.get(key).focus();return;}
@@ -119,8 +127,7 @@ async function connect(input,authMode='private') {
   const host=normalizeHost(input.host), secret=String(input.token || '').trim();
   if(!secret) throw new Error('Введите токен с правом read_api.');
   const user=await createClient(host,secret,undefined,authMode).user();
-  if(!await safeStorage.isAsyncEncryptionAvailable()) throw new Error('Защищённое хранилище Windows недоступно.');
-  const encrypted=(await safeStorage.encryptStringAsync(secret)).toString('base64');
+  const encrypted=await tokenVault.encrypt(secret);
   const sameHost = config.host===host;
   const next = {...config,host,token:encrypted,authMode,username:user.username,projects:sameHost?config.projects:[],groups:sameHost?config.groups:[],widgets:sameHost?config.widgets:{}};
   await persist(next);
@@ -232,6 +239,7 @@ register('windowAction',async (action,event) => {
     return (await setWidgetView(isCompact(entry[0])?'full':'compact',event))!=='full';
   }
   if(action==='minimize') w.minimize();
+  if(action==='quit') app.quit();
   if(action==='overview') showOverview();
   if(action==='close') {
     const entry=[...widgets].find(([,win])=>win===w);
@@ -256,22 +264,28 @@ if(single) app.whenReady().then(async () => {
     if(!stored)await persist();
   } catch {
     store?.close();store=null;
-    dialog.showErrorBox('Pipeline Desk','Не удалось открыть локальную базу настроек. Данные сохранены. Проверьте доступ к папке приложения в AppData и повторите запуск.');
+    dialog.showErrorBox('Pipeline Desk','Не удалось открыть локальную базу настроек. Данные сохранены. Проверьте доступ к папке данных приложения и повторите запуск.');
     app.quit();return;
   }
-  try{if(config.token)token=(await safeStorage.decryptStringAsync(Buffer.from(config.token,'base64'))).result;}
-  catch{startupError='Не удалось расшифровать токен. Подключите GitLab заново.';}
+  try{if(config.token)token=await tokenVault.decrypt(config.token);}
+  catch{startupError=process.platform==='linux'?'Не удалось расшифровать токен. Разблокируйте хранилище секретов и перезапустите приложение или подключите GitLab заново.':'Не удалось расшифровать токен. Подключите GitLab заново.';}
   overview=createWindow();
-  tray=new Tray(nativeImage.createFromPath(path.join(__dirname,'../assets/icon.png')).resize({width:20,height:20}));
-  tray.setToolTip('Pipeline Desk');
-  tray.setContextMenu(Menu.buildFromTemplate([{label:'Открыть Pipeline Desk',click:showOverview},{label:'Обновить',click:refresh},{type:'separator'},{label:'Выйти',click:()=>app.quit()}]));
-  tray.on('double-click',showOverview);
+  try{
+    tray=new Tray(nativeImage.createFromPath(path.join(__dirname,'../assets/icon.png')).resize({width:20,height:20}));
+    tray.setToolTip('Pipeline Desk');
+    tray.setContextMenu(Menu.buildFromTemplate([{label:'Открыть Pipeline Desk',click:showOverview},{label:'Обновить',click:()=>refresh().catch(()=>{})},{type:'separator'},{label:'Выйти',click:()=>app.quit()}]));
+    tray.on(process.platform==='linux'?'click':'double-click',showOverview);
+  }catch(error){
+    if(process.platform!=='linux')throw error;
+    console.warn('System tray unavailable; use the overview window.');
+  }
   for(const [key,value]of Object.entries(config.widgets))if(value.open)try{openWidget(key);}catch{}
   if(!token&&config.netrcPath&&config.netrcAuto&&!config.netrcFailed){
     connectNetrc().catch(error=>{startupError=error.message;broadcast();});
   }else refresh();
 });
 app.on('second-instance',showOverview);
+app.on('activate',showOverview);
 app.on('before-quit',()=>{
   quitting=true;clearTimeout(timer);
   if(!store)return;

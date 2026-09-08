@@ -1,4 +1,4 @@
-import {_electron as electron} from 'playwright';
+import {launchElectron,overviewPage} from './electron.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -7,13 +7,26 @@ import {demoProjects} from '../ui/demo.js';
 import {readConfig,DATABASE_NAME} from '../electron/storage.cjs';
 const env={...process.env,PIPELINE_DESK_PROFILE:await fs.mkdtemp(path.join(os.tmpdir(),'pipeline-desk-packaged-')),PIPELINE_DESK_TEST:'1'};
 delete env.ELECTRON_RUN_AS_NODE;
-const app=await electron.launch({executablePath:path.resolve('release/PipelineDesk-win32-x64/PipelineDesk.exe'),args:[],env});
+const executablePath=process.env.PIPELINE_DESK_EXECUTABLE||path.resolve(process.platform==='linux'?'release/PipelineDesk-linux-x64/pipeline-desk':'release/PipelineDesk-win32-x64/PipelineDesk.exe');
+const app=await launchElectron({executablePath,args:[],env});
 try{
-  const page=await app.firstWindow();
+  const page=await overviewPage(app);
   await page.locator('.pipeline-card').first().waitFor();
   assert.equal(await page.locator('.pipeline-card').count(),6);
   assert.equal(await app.evaluate(({app})=>app.isPackaged),true);
+  assert.equal(await app.evaluate(({app})=>app.commandLine.hasSwitch('no-sandbox')),false);
   assert.equal(await page.evaluate(async()=> (await window.desk.snapshot()).desktop),true);
+  assert.equal(await app.evaluate(({BrowserWindow})=>{
+    const preferences=BrowserWindow.getAllWindows()[0].webContents.getLastWebPreferences();
+    return preferences.sandbox&&preferences.contextIsolation&&!preferences.nodeIntegration;
+  }),true);
+  if(process.platform==='linux'){
+    assert.equal(await app.evaluate(({app})=>app.commandLine.getSwitchValue('ozone-platform')),'x11');
+    assert.equal(await app.evaluate(({safeStorage})=>{
+      if(!safeStorage.isEncryptionAvailable()||!['gnome_libsecret','kwallet','kwallet5','kwallet6'].includes(safeStorage.getSelectedStorageBackend()))return false;
+      return safeStorage.decryptString(safeStorage.encryptString('packaged-fixture-only'))==='packaged-fixture-only';
+    }),true);
+  }
   assert.equal((await fs.readFile(path.join(env.PIPELINE_DESK_PROFILE,DATABASE_NAME))).subarray(0,16).toString(),'SQLite format 3\0');
   assert.equal(readConfig(env.PIPELINE_DESK_PROFILE).interval,15000);
   const opened=app.waitForEvent('window');
@@ -37,5 +50,5 @@ try{
   assert.equal(await group.locator('.pipeline-card').count(),6);
   assert.equal(await group.locator('.pipeline-card').evaluateAll(cards=>cards.every(card=>card.querySelector('.card-bottom').getBoundingClientRect().bottom<=card.getBoundingClientRect().bottom+1)),true,'Packaged detailed cards must not clip their content');
   assert.equal(await group.locator('.group-body').evaluate(el=>el.scrollHeight>el.clientHeight),true);
-  console.log('PASS: packaged Windows EXE, SQLite storage, sandboxed preload, native widget, three views, six detailed cards without clipping.');
-}finally{await app.close();}
+  console.log('PASS: packaged desktop app, SQLite storage, sandboxed preload, native widget, three views, six detailed cards without clipping.');
+}finally{await app.close();await fs.rm(env.PIPELINE_DESK_PROFILE,{recursive:true,force:true});}

@@ -22,7 +22,7 @@ export function installSetup({getState,updateState,notify}){
     $('#token-input').removeAttribute('aria-invalid');$('#settings-error').textContent='';
     $('#interval-input').value=String(s.interval);$('#host-field').hidden=true;$('#edit-server').setAttribute('aria-expanded','false');
     $('#disconnect-button').hidden=!s.connected;$('#settings-dialog .setup-details').open=false;
-    $('#credential-note').textContent=!native?'Подключение доступно в Windows-приложении.':s.netrcFailed&&!s.connected?'Данные .netrc не подошли. Нужен токен с правом read_api.':'Сохраним автоматически. Повторный ввод не нужен.';
+    $('#credential-note').textContent=!native?'Подключение доступно в настольном приложении.':s.netrcFailed&&!s.connected?'Данные .netrc не подошли. Нужен токен с правом read_api.':'Сохраним автоматически. Повторный ввод не нужен.';
     $('#netrc-label').textContent=s.netrcFailed?'Повторить из .netrc':'Использовать .netrc';
     setConnectionBusy(false);updateServer();$('#settings-dialog').showModal();$('#token-input').focus();
   }
@@ -76,7 +76,7 @@ export function installSetup({getState,updateState,notify}){
   $('#netrc-button').addEventListener('click',()=>connect(true));
   $('#create-token-button').addEventListener('click',async()=>{
     if(!$('#host-input').checkValidity()){$('#host-field').hidden=false;$('#host-input').reportValidity();return;}
-    try{if(native)await window.desk.createToken(host());else{$('#settings-error').textContent='Откройте Windows-приложение, чтобы перейти в ваш GitLab.';}}catch(e){$('#settings-error').textContent=e.message;}
+    try{if(native)await window.desk.createToken(host());else{$('#settings-error').textContent='Откройте настольное приложение, чтобы перейти в ваш GitLab.';}}catch(e){$('#settings-error').textContent=e.message;}
   });
   $('#disconnect-button').addEventListener('click',async()=>{try{updateState(await window.desk.disconnect());$('#token-input').value='';$('#settings-dialog').close();notify('GitLab отключён');}catch(e){$('#settings-error').textContent=e.message;}});
   $('#settings-dialog').addEventListener('close',()=>{$('#token-input').value='';});

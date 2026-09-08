@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Pipeline Desk
+Comment=GitLab pipeline widgets
+Comment[ru]=Виджеты пайплайнов GitLab
+Exec=/usr/bin/pipeline-desk
+Icon=pipeline-desk
+Terminal=false
+Categories=Development;
+StartupNotify=true
+StartupWMClass=pipeline-desk

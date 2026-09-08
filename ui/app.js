@@ -96,6 +96,7 @@ function updateWidget(markup){
   }else $('#widget').replaceChildren(template.content);
 }
 function render(){
+  document.querySelector('[data-window="close"]').setAttribute('aria-label',state.platform==='linux'?'Свернуть в панель задач':'Скрыть в трей');
   let all=projects();
   if(widgetKey){
     const p=all.find(p=>p.key===widgetKey),g=groups().find(g=>g.key===widgetKey),mode=widgetView(),scroll=$('.group-body')?.scrollTop||0;
@@ -168,12 +169,12 @@ async function act(action,key,el){
   if(action==='detail'){currentDetail=key;renderDetail(key);if(!$('#detail-dialog').open)openDialog('#detail-dialog');}
   if(action==='pin'){
     if(native){await window.desk[p.pinned?'closeWidget':'openWidget'](key);notify(p.pinned?'Виджет закрыт':'Виджет закреплён на рабочем столе');}
-    else {window.open(`${location.pathname}?widget=${encodeURIComponent(key)}`,'widget-'+key,'popup,width=388,height=280');notify('Предпросмотр. Закрепление доступно в Windows-приложении.');}
+    else {window.open(`${location.pathname}?widget=${encodeURIComponent(key)}`,'widget-'+key,'popup,width=388,height=280');notify('Предпросмотр. Закрепление доступно в настольном приложении.');}
   }
   if(action==='history'||action==='external')await external(el.dataset.url);
   if(action==='window-pin'){
     if(native){pinned=await window.desk.windowAction('pin');render();}
-    else notify('Закрепление поверх окон доступно в приложении Windows.');
+    else notify('Закрепление поверх окон доступно в настольном приложении.');
   }
   if(action==='window-close'){if(native)await window.desk.windowAction('close');else window.close();}
   if(action==='overview'){if(native)await window.desk.windowAction('overview');else location.href=location.pathname;}

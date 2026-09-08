@@ -1,11 +1,11 @@
-import {chromium} from 'playwright';
+import {launchBrowser} from './browser.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import {demoProjects} from '../ui/demo.js';
 
 const key='group:layout-fixture',projects=demoProjects().map(p=>({...p,demo:false}));
 const state={connected:true,host:'https://git.fixture.invalid',projects,groups:[{key,name:'Мои проекты',memberKeys:projects.map(p=>p.key),sources:[]}],widgets:[key],widgetOptions:{[key]:{view:'full'}},interval:15000};
-const browser=await chromium.launch({channel:'msedge',headless:true});
+const browser=await launchBrowser();
 try{
   const page=await browser.newPage({viewport:{width:475,height:612}});
   await page.addInitScript(snapshot=>{

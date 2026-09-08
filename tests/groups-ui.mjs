@@ -1,4 +1,5 @@
-import {_electron as electron,chromium} from 'playwright';
+import {launchBrowser} from './browser.mjs';
+import {launchElectron,overviewPage} from './electron.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -9,7 +10,7 @@ const shots=path.join(root,'.impeccable/review');await fs.mkdir(shots,{recursive
 const env={...process.env,PIPELINE_DESK_PROFILE:profile,PIPELINE_DESK_TEST:'1'};delete env.ELECTRON_RUN_AS_NODE;
 let app,browser;const errors=[];
 try{
-  app=await electron.launch({args:[root],env});const page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));
+  app=await launchElectron({args:[root],env});const page=await overviewPage(app);page.on('pageerror',e=>errors.push(e.message));
   await page.locator('.pipeline-card').first().waitFor();
   await app.evaluate(({shell})=>{
     globalThis.membersChanged=false;globalThis.openedUrls=[];shell.openExternal=async url=>{globalThis.openedUrls.push(url);};
@@ -78,7 +79,7 @@ try{
   assert.equal(stored.groups.length,3);assert.equal(stored.widgets['42:'].compact,true);
   const snapshot=await page.evaluate(()=>window.desk.snapshot());
   await app.close();app=null;
-  app=await electron.launch({args:[root],env});const restored=await app.firstWindow();
+  app=await launchElectron({args:[root],env});const restored=await overviewPage(app);
   await restored.locator('.compact-project').first().waitFor();
   assert.equal((await restored.evaluate(()=>window.desk.snapshot())).groups.length,3);
   await restored.waitForFunction(()=>Object.keys(window.desk).includes('saveGroup'));
@@ -86,7 +87,7 @@ try{
   assert.equal(nativeWindows.find(w=>w.key==='42:').height<=120,true);
   assert.ok(nativeWindows.filter(w=>w.key).every(w=>w.pinned));
   await app.close();app=null;
-  browser=await chromium.launch({channel:'msedge',headless:true});const narrow=await browser.newPage({viewport:{width:390,height:844}});
+  browser=await launchBrowser();const narrow=await browser.newPage({viewport:{width:390,height:844}});
   await narrow.addInitScript(state=>{window.desk={snapshot:async()=>state,onUpdate:()=>{}};localStorage.setItem('desk-view','compact');localStorage.setItem('desk-group',state.groups[2].key);},snapshot);
   await narrow.goto('http://127.0.0.1:4317/ui/index.html');await narrow.locator('.compact-project').first().waitFor();
   await narrow.screenshot({path:path.join(shots,'groups-narrow.png'),animations:'disabled'});

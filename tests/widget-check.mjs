@@ -1,12 +1,12 @@
-import {_electron as electron} from 'playwright';
+import {launchElectron,overviewPage} from './electron.mjs';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 const env={...process.env,PIPELINE_DESK_PROFILE:await fs.mkdtemp(path.join(os.tmpdir(),'pipeline-desk-widget-')),PIPELINE_DESK_TEST:'1'};delete env.ELECTRON_RUN_AS_NODE;
-const app=await electron.launch({args:[path.resolve('.')],env});
+const app=await launchElectron({args:[path.resolve('.')],env});
 try{
-  const page=await app.firstWindow();await page.locator('.pipeline-card').first().waitFor();
+  const page=await overviewPage(app);await page.locator('.pipeline-card').first().waitFor();
   const opened=app.waitForEvent('window');await page.getByRole('button',{name:'Закрепить виджет supply-demand-backend',exact:true}).click();
   const widget=await opened;await widget.locator('.pipeline-card').waitFor();
   const regions=await widget.evaluate(()=>({title:getComputedStyle(document.querySelector('.widget-bar')).getPropertyValue('-webkit-app-region'),pin:getComputedStyle(document.querySelector('[data-action="window-pin"]')).getPropertyValue('-webkit-app-region'),close:getComputedStyle(document.querySelector('[data-action="window-close"]')).getPropertyValue('-webkit-app-region')}));

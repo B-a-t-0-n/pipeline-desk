@@ -1,4 +1,5 @@
-import {_electron as electron,chromium} from 'playwright';
+import {launchBrowser} from './browser.mjs';
+import {launchElectron,overviewPage} from './electron.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -15,8 +16,8 @@ const env={...process.env,PIPELINE_DESK_PROFILE:profile,PIPELINE_DESK_TEST:'1'};
 let app,browser;
 const errors=[];
 try{
-  app=await electron.launch({args:[root],env});
-  const page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));
+  app=await launchElectron({args:[root],env});
+  const page=await overviewPage(app);page.on('pageerror',e=>errors.push(e.message));
   await page.locator('.pipeline-card').first().waitFor();
   await app.evaluate(({shell})=>{
     globalThis.openedUrls=[];shell.openExternal=async url=>{globalThis.openedUrls.push(url);};
@@ -85,8 +86,8 @@ try{
   const snapshot=await page.evaluate(()=>window.desk.snapshot());
   assert.equal('token' in snapshot,false);assert.equal('netrcPath' in snapshot,false);
   await app.close();app=null;
-  app=await electron.launch({args:[root],env});
-  const restored=await app.firstWindow();
+  app=await launchElectron({args:[root],env});
+  const restored=await overviewPage(app);
   await restored.locator('.pipeline-card[data-project="42:"]').waitFor();
   assert.equal(await restored.evaluate(async()=>(await window.desk.snapshot()).connected),true);
   await restored.locator('#settings-button').click();
@@ -98,7 +99,7 @@ try{
   for(const name of await fs.readdir(profile))if(name.startsWith(DATABASE_NAME))assert.equal((await fs.readFile(path.join(profile,name))).includes(Buffer.from('fixture-pat')),false);
   await app.close();app=null;
   // Narrow rendering uses the same production files with a non-secret preview bridge.
-  browser=await chromium.launch({channel:'msedge',headless:true});
+  browser=await launchBrowser();
   const narrow=await browser.newPage({viewport:{width:390,height:844}});
   await narrow.addInitScript(()=>{
     const state={connected:true,host:'https://git.example.invalid',projects:[],widgets:[],interval:15000};

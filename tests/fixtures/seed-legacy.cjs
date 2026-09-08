@@ -1,10 +1,13 @@
-// Creates an old-format profile with a real Windows-encrypted test credential.
+// Creates an old-format profile with a real platform-encrypted test credential.
 const {app,safeStorage}=require('electron');
+const {configurePlatform}=require('../../electron/platform.cjs');
+const {createTokenVault}=require('../../electron/credentials.cjs');
+configurePlatform(app);
 const fs=require('node:fs');
 const path=require('node:path');
 app.setName('Pipeline Desk');app.setPath('userData',process.env.PIPELINE_DESK_PROFILE);
 app.whenReady().then(async()=>{
-  const token=(await safeStorage.encryptStringAsync('migration-fixture-token')).toString('base64');
+  const token=await createTokenVault(safeStorage).encrypt('migration-fixture-token');
   const config={host:'https://git.migration.invalid',token,username:'migration-user',interval:30000,
     projects:[{id:42,key:'42:',name:'backend',namespace:'team',branch:'main',webUrl:'https://git.migration.invalid/team/backend'}],
     groups:[{key:'group:migration',name:'Работа',projectKeys:['42:'],sources:[]}],

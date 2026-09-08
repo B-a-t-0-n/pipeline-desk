@@ -1,0 +1,10 @@
+# Allow Chromium's own sandbox to create user namespaces on Ubuntu 24.04.
+# This is not a filesystem confinement profile. It is restricted to the
+# root-owned installed executable, following Ubuntu's Electron profiles.
+abi <abi/4.0>,
+include <tunables/global>
+
+profile pipeline-desk /opt/pipeline-desk/pipeline-desk flags=(unconfined) {
+  userns,
+  include if exists <local/pipeline-desk>
+}

@@ -1,4 +1,4 @@
-import {_electron as electron} from 'playwright';
+import {launchElectron,overviewPage} from './electron.mjs';
 import electronPath from 'electron';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
@@ -15,8 +15,8 @@ await promisify(execFile)(electronPath,[path.join(root,'tests/fixtures/seed-lega
 const legacy=await fs.readFile(path.join(profile,'settings.json'),'utf8');
 let app;
 async function launch(){
-  app=await electron.launch({args:[root],env});
-  const page=await app.firstWindow();await page.locator('.pipeline-card,.empty-state').first().waitFor();return page;
+  app=await launchElectron({args:[root],env});
+  const page=await overviewPage(app);await page.locator('.pipeline-card,.empty-state').first().waitFor();return page;
 }
 try{
   const page=await launch();
@@ -31,7 +31,7 @@ try{
     const {DatabaseSync}=process.getBuiltinModule('node:sqlite');
     const db=new DatabaseSync(process.getBuiltinModule('node:path').join(process.env.PIPELINE_DESK_PROFILE,'config.sqlite'),{readOnly:true});
     const encrypted=Buffer.from(db.prepare("SELECT ciphertext FROM credentials WHERE name='gitlab'").get().ciphertext);db.close();
-    return (await safeStorage.decryptStringAsync(encrypted)).result==='migration-fixture-token';
+    return (process.platform==='linux'?safeStorage.decryptString(encrypted):(await safeStorage.decryptStringAsync(encrypted)).result)==='migration-fixture-token';
   }),true);
   const widget=(await app.windows()).find(w=>w.url().includes('widget='));assert.ok(widget);
   await widget.locator('.widget-view-select').waitFor();
@@ -52,5 +52,5 @@ try{
   await app.close();app=null;
   const disconnected=await launch();assert.equal((await disconnected.evaluate(()=>window.desk.snapshot())).connected,false);
   for(const file of await fs.readdir(profile))if(file.startsWith(DATABASE_NAME))assert.equal((await fs.readFile(path.join(profile,file))).includes(Buffer.from('migration-fixture-token')),false);
-  console.log('PASS: legacy Windows token migrates unchanged into SQLite, decrypts after restart, restores groups/windows/views, saves changes, and stays disconnected despite legacy JSON.');
+  console.log('PASS: platform-encrypted token migrates unchanged into SQLite, decrypts after restart, restores groups/windows/views, saves changes, and stays disconnected despite legacy JSON.');
 }finally{if(app)await app.close().catch(()=>{});}

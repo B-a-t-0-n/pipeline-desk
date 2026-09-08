@@ -1,4 +1,5 @@
-import {_electron as electron,chromium} from 'playwright';
+import {launchBrowser} from './browser.mjs';
+import {launchElectron,overviewPage} from './electron.mjs';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
@@ -11,7 +12,7 @@ const shots=path.join(root,'.impeccable/review');await fs.mkdir(shots,{recursive
 const env={...process.env,PIPELINE_DESK_PROFILE:profile,PIPELINE_DESK_TEST:'1'};delete env.ELECTRON_RUN_AS_NODE;
 let app,browser;const errors=[];
 try{
-  app=await electron.launch({args:[root],env});const page=await app.firstWindow();
+  app=await launchElectron({args:[root],env});const page=await overviewPage(app);
   await page.locator('.pipeline-card').first().waitFor();
   const created=app.waitForEvent('window');await page.evaluate(()=>window.desk.openWidget('demo-group-platform'));
   const widget=await created;widget.on('pageerror',e=>errors.push(e.message));
@@ -39,7 +40,7 @@ try{
   const stored=readConfig(profile);
   assert.equal(stored.widgets['demo-group-platform'].view,'stages');
   await app.close();app=null;
-  app=await electron.launch({args:[root],env});await app.firstWindow();
+  app=await launchElectron({args:[root],env});await overviewPage(app);
   await app.evaluate(async()=>{await new Promise(resolve=>setTimeout(resolve,200));});
   const restored=(await app.windows()).find(w=>w.url().includes('widget='));assert.ok(restored);
   await restored.locator('.pipeline-stage-block').first().waitFor();
@@ -50,7 +51,7 @@ try{
   const projects=demoProjects().slice(0,3).map(p=>({...p,demo:false,webUrl:'https://git.fixture.invalid/project'}));
   const key='group:fixture';
   const snapshot={desktop:true,connected:true,host:'https://git.fixture.invalid',projects,groups:[{key,name:'Мои проекты',memberKeys:projects.map(p=>p.key),sources:[]}],widgets:[key],widgetOptions:{[key]:{view:'stages'}},interval:15000};
-  browser=await chromium.launch({channel:'msedge',headless:true});
+  browser=await launchBrowser();
   const fixture=await browser.newPage({viewport:{width:440,height:378}});fixture.on('pageerror',e=>errors.push(e.message));
   await fixture.addInitScript(state=>{
     localStorage.setItem('desk-theme','light');
