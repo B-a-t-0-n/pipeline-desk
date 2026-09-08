@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {readConfig} from '../electron/storage.cjs';
+import {execFileSync} from 'node:child_process';
 
 const profile = await fs.mkdtemp(path.join(os.tmpdir(), 'pipeline-desk-platform-'));
 const env = {...process.env, PIPELINE_DESK_PROFILE:profile, PIPELINE_DESK_TEST:'1'};
@@ -29,6 +30,9 @@ try {
     assert.equal(await app.evaluate(({app}) => app.commandLine.getSwitchValue('ozone-platform')), 'x11');
     await page.getByRole('button', {name:'Свернуть в панель задач', exact:true}).waitFor();
     await app.evaluate(({BrowserWindow}) => BrowserWindow.getAllWindows()[0].show());
+    const id=await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows()[0].getNativeWindowHandle().readUInt32LE());
+    const properties=execFileSync('xprop',['-id',String(id),'WM_CLASS'],{encoding:'utf8'});
+    assert.match(properties,/pipeline-desk/, 'The window must exist on X11 with its desktop identity');
     await page.getByRole('button', {name:'Свернуть в панель задач', exact:true}).click();
     await waitForMinimized(true);
     await app.evaluate(({app}) => app.emit('activate'));

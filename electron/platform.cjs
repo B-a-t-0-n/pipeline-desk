@@ -1,12 +1,17 @@
 const path = require('node:path');
 
-function configurePlatform(app, platform = process.platform) {
-  if (platform !== 'linux') return;
+function configurePlatform(app, platform = process.platform, argv = process.argv.slice(1)) {
+  if (platform !== 'linux') return true;
   // Pinning, programmatic resizing and restoring coordinates require X11.
   // On Ubuntu's Wayland desktop this uses the system XWayland server.
-  app.commandLine.appendSwitch('ozone-platform', 'x11');
+  if (app.commandLine.getSwitchValue('ozone-platform') !== 'x11') {
+    app.relaunch({args: [...argv, '--ozone-platform=x11']});
+    app.exit(0);
+    return false;
+  }
   app.commandLine.appendSwitch('class', 'pipeline-desk');
   app.setDesktopName('pipeline-desk.desktop');
+  return true;
 }
 
 function windowIcon(directory, platform = process.platform) {

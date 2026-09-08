@@ -42,7 +42,7 @@ try {
   await fs.cp(application, path.join(staging, 'opt/pipeline-desk'), {recursive: true});
   // Use user namespaces through the AppArmor profile, not a setuid executable.
   await fs.chmod(path.join(staging, 'opt/pipeline-desk/chrome-sandbox'), 0o755);
-  await write('usr/bin/pipeline-desk', '#!/bin/sh\nexec /opt/pipeline-desk/pipeline-desk "$@"\n', 0o755);
+  await write('usr/bin/pipeline-desk', '#!/bin/sh\nexec /opt/pipeline-desk/pipeline-desk --ozone-platform=x11 "$@"\n', 0o755);
   await write('usr/share/applications/pipeline-desk.desktop', await fs.readFile(path.join(root, 'packaging/linux/pipeline-desk.desktop')));
   await write('usr/share/icons/hicolor/scalable/apps/pipeline-desk.svg', await fs.readFile(path.join(root, 'assets/icon.svg')));
   await write('etc/apparmor.d/pipeline-desk', await fs.readFile(path.join(root, 'packaging/linux/pipeline-desk.apparmor')));

@@ -11,7 +11,7 @@ import {readConfig,DATABASE_NAME} from '../electron/storage.cjs';
 
 const root=path.resolve('.'),profile=await fs.mkdtemp(path.join(os.tmpdir(),'pipeline-desk-migration-'));
 const env={...process.env,PIPELINE_DESK_PROFILE:profile,PIPELINE_DESK_TEST:'1'};delete env.ELECTRON_RUN_AS_NODE;
-await promisify(execFile)(electronPath,[path.join(root,'tests/fixtures/seed-legacy.cjs')],{env,windowsHide:true,timeout:20000});
+await promisify(execFile)(electronPath,[...(process.platform==='linux'?['--ozone-platform=x11']:[]),path.join(root,'tests/fixtures/seed-legacy.cjs')],{env,windowsHide:true,timeout:20000});
 const legacy=await fs.readFile(path.join(profile,'settings.json'),'utf8');
 let app;
 async function launch(){

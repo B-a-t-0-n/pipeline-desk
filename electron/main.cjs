@@ -5,10 +5,9 @@ const {normalizeHost,parseProject,createClient} = require('./gitlab.cjs');
 const {readNetrc} = require('./netrc.cjs');
 const {createGroupService,groupProjectKeys}=require('./groups.cjs');
 const {openConfigStore}=require('./storage.cjs');
-const {configurePlatform,windowIcon,dismissOverview,restoreOverview}=require('./platform.cjs');
+const {windowIcon,dismissOverview,restoreOverview}=require('./platform.cjs');
 const {createTokenVault}=require('./credentials.cjs');
 
-configurePlatform(app);
 const tokenVault=createTokenVault(safeStorage);
 if (process.env.PIPELINE_DESK_PROFILE) app.setPath('userData', process.env.PIPELINE_DESK_PROFILE);
 const single = app.requestSingleInstanceLock();

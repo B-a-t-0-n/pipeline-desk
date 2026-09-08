@@ -7,7 +7,7 @@
   "engines": {
     "node": ">=22.12.0"
   },
-  "main": "electron/main.cjs",
+  "main": "electron/bootstrap.cjs",
   "scripts": {
     "start": "electron .",
     "preview": "node scripts/preview.mjs",

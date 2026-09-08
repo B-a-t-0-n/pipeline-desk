@@ -3,10 +3,16 @@ const assert = require('node:assert/strict');
 const path = require('node:path');
 const {configurePlatform, windowIcon, dismissOverview, restoreOverview} = require('../electron/platform.cjs');
 
-test('Linux selects X11 before startup so Ubuntu Wayland uses XWayland', () => {
+test('an X11 process registers Linux desktop integration without restarting', () => {
   const calls = [];
-  configurePlatform({commandLine:{appendSwitch:(...args)=>calls.push(args)},setDesktopName:name=>calls.push([name])}, 'linux');
-  assert.deepEqual(calls, [['ozone-platform','x11'], ['class','pipeline-desk'], ['pipeline-desk.desktop']]);
+  assert.equal(configurePlatform({commandLine:{getSwitchValue:()=> 'x11',appendSwitch:(...args)=>calls.push(args)},setDesktopName:name=>calls.push([name])}, 'linux'),true);
+  assert.deepEqual(calls, [['class','pipeline-desk'], ['pipeline-desk.desktop']]);
+});
+test('direct Linux startup relaunches with X11 on the process command line', () => {
+  const calls=[];
+  const app={commandLine:{getSwitchValue:()=>''},relaunch:options=>calls.push(options),exit:code=>calls.push(code)};
+  assert.equal(configurePlatform(app,'linux',['/path to/project','--example']),false);
+  assert.deepEqual(calls,[{args:['/path to/project','--example','--ozone-platform=x11']},0]);
 });
 test('Windows startup does not receive Linux switches', () => {
   configurePlatform({}, 'win32');

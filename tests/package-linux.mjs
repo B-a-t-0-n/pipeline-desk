@@ -23,7 +23,7 @@ try {
   await exec('dpkg-deb', ['--extract', deb, extracted]);
   await exec('dpkg-deb', ['--control', deb, path.join(extracted, 'DEBIAN')]);
   const launcher = await fs.readFile(path.join(extracted, 'usr/bin/pipeline-desk'), 'utf8');
-  assert.match(launcher, /exec \/opt\/pipeline-desk\/pipeline-desk "\$@"/);
+  assert.match(launcher, /exec \/opt\/pipeline-desk\/pipeline-desk --ozone-platform=x11 "\$@"/);
   assert.ok(!launcher.includes('--no-sandbox'));
   const desktop = path.join(extracted, 'usr/share/applications/pipeline-desk.desktop');
   await exec('desktop-file-validate', [desktop]);
