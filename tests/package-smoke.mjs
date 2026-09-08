@@ -4,6 +4,7 @@ import path from 'node:path';
 import os from 'node:os';
 import assert from 'node:assert/strict';
 import {demoProjects} from '../ui/demo.js';
+import {readConfig,DATABASE_NAME} from '../electron/storage.cjs';
 const env={...process.env,PIPELINE_DESK_PROFILE:await fs.mkdtemp(path.join(os.tmpdir(),'pipeline-desk-packaged-')),PIPELINE_DESK_TEST:'1'};
 delete env.ELECTRON_RUN_AS_NODE;
 const app=await electron.launch({executablePath:path.resolve('release/PipelineDesk-win32-x64/PipelineDesk.exe'),args:[],env});
@@ -13,6 +14,8 @@ try{
   assert.equal(await page.locator('.pipeline-card').count(),6);
   assert.equal(await app.evaluate(({app})=>app.isPackaged),true);
   assert.equal(await page.evaluate(async()=> (await window.desk.snapshot()).desktop),true);
+  assert.equal((await fs.readFile(path.join(env.PIPELINE_DESK_PROFILE,DATABASE_NAME))).subarray(0,16).toString(),'SQLite format 3\0');
+  assert.equal(readConfig(env.PIPELINE_DESK_PROFILE).interval,15000);
   const opened=app.waitForEvent('window');
   await page.getByRole('button',{name:'Закрепить виджет supply-demand-backend',exact:true}).click();
   const widget=await opened;await widget.locator('.pipeline-card').waitFor();
@@ -22,6 +25,7 @@ try{
   await widget.getByLabel('Вид виджета').selectOption('compact');
   await widget.waitForFunction(()=>document.body.dataset.widgetView==='compact');
   assert.equal(await widget.locator('.stage,.branch-label,.namespace').count(),0);
+  assert.equal(readConfig(env.PIPELINE_DESK_PROFILE).widgets['demo-0'].view,'compact');
   const groupOpened=app.waitForEvent('window');await page.evaluate(()=>window.desk.openWidget('demo-group-platform'));
   const group=await groupOpened;await group.locator('.pipeline-stage-block').first().waitFor();
   assert.equal(await group.locator('.stage').count(),8);
@@ -33,5 +37,5 @@ try{
   assert.equal(await group.locator('.pipeline-card').count(),6);
   assert.equal(await group.locator('.pipeline-card').evaluateAll(cards=>cards.every(card=>card.querySelector('.card-bottom').getBoundingClientRect().bottom<=card.getBoundingClientRect().bottom+1)),true,'Packaged detailed cards must not clip their content');
   assert.equal(await group.locator('.group-body').evaluate(el=>el.scrollHeight>el.clientHeight),true);
-  console.log('PASS: packaged Windows EXE, sandboxed preload, native widget, three views, six detailed cards without clipping.');
+  console.log('PASS: packaged Windows EXE, SQLite storage, sandboxed preload, native widget, three views, six detailed cards without clipping.');
 }finally{await app.close();}

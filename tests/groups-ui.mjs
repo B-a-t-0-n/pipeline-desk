@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import {readConfig} from '../electron/storage.cjs';
 const root=path.resolve('.'),profile=await fs.mkdtemp(path.join(os.tmpdir(),'pipeline-desk-groups-'));
 const shots=path.join(root,'.impeccable/review');await fs.mkdir(shots,{recursive:true});
 const env={...process.env,PIPELINE_DESK_PROFILE:profile,PIPELINE_DESK_TEST:'1'};delete env.ELECTRON_RUN_AS_NODE;
@@ -73,7 +74,7 @@ try{
   const shortWindow=await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>new URL(w.webContents.getURL()).searchParams.get('widget')==='42:').getBounds());
   assert.ok(shortWindow.height<=120);
   await solo.screenshot({path:path.join(shots,'compact-widget.png'),animations:'disabled'});
-  const stored=JSON.parse(await fs.readFile(path.join(profile,'settings.json'),'utf8'));
+  const stored=readConfig(profile);
   assert.equal(stored.groups.length,3);assert.equal(stored.widgets['42:'].compact,true);
   const snapshot=await page.evaluate(()=>window.desk.snapshot());
   await app.close();app=null;

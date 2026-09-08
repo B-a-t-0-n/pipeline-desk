@@ -1,20 +1,19 @@
-const {app,BrowserWindow,ipcMain,safeStorage,shell,screen,Tray,Menu,nativeImage} = require('electron');
-const fs = require('node:fs/promises');
+const {app,BrowserWindow,ipcMain,safeStorage,shell,screen,Tray,Menu,nativeImage,dialog} = require('electron');
 const path = require('node:path');
 const {pathToFileURL} = require('node:url');
 const {normalizeHost,parseProject,createClient} = require('./gitlab.cjs');
 const {readNetrc} = require('./netrc.cjs');
 const {createGroupService,groupProjectKeys}=require('./groups.cjs');
+const {openConfigStore}=require('./storage.cjs');
 
 if (process.env.PIPELINE_DESK_PROFILE) app.setPath('userData', process.env.PIPELINE_DESK_PROFILE);
 const single = app.requestSingleInstanceLock();
 if (!single) app.quit();
 let config = {host:'',token:'',username:'',interval:15000,projects:[],groups:[],widgets:{},bounds:null,netrcPath:'',netrcFailed:false,netrcAuto:true,authMode:'private'};
-let token = '', data = new Map(), overview, tray, timer, refreshing, epoch = 0, lastUpdate = null, startupError = '', quitting = false, writeQueue = Promise.resolve();
+let token = '', data = new Map(), overview, tray, timer, refreshing, epoch = 0, lastUpdate = null, startupError = '', quitting = false, store;
 const widgets = new Map();
 const pagePath = path.join(__dirname,'../ui/index.html');
 const pageUrl = pathToFileURL(pagePath).href;
-const filePath = () => path.join(app.getPath('userData'),'settings.json');
 const groupService=createGroupService({getConfig:()=>config,getEpoch:()=>epoch,getClient:()=>{
   if(!token)throw new Error('Сначала подключите GitLab.');
   return createClient(config.host,token,undefined,config.authMode);
@@ -33,15 +32,9 @@ function widgetHeight(key,view){
   const group=config.groups.find(g=>g.key===key),count=group?groupProjectKeys(group).length:2;
   return view==='full'?620:Math.max(widgetMinHeight(key,view),Math.min(600,66+count*(view==='compact'?38:104)));
 }
-function persist(next = config) {
-  const content = JSON.stringify(next,null,2);
-  const write = writeQueue.catch(() => {}).then(async () => {
-    await fs.mkdir(app.getPath('userData'),{recursive:true});
-    await fs.writeFile(filePath()+'.tmp',content,'utf8');
-    await fs.rename(filePath()+'.tmp',filePath());
-  });
-  writeQueue = write;
-  return write;
+async function persist(next = config) {
+  if(!store)throw new Error('Локальное хранилище недоступно.');
+  store.save(next);
 }
 function snapshot() {
   return {desktop:true,connected:!!token,host:config.host,username:config.username,interval:config.interval,updating:!!refreshing,lastUpdate,error:startupError,netrcAvailable:!!config.netrcPath,netrcFailed:!!config.netrcFailed,
@@ -256,12 +249,18 @@ if(single) app.whenReady().then(async () => {
   app.setAppUserModelId('local.pipeline-desk');
   Menu.setApplicationMenu(null);
   try {
-    const stored=JSON.parse(await fs.readFile(filePath(),'utf8'));
-    if(!Array.isArray(stored.projects) || !stored.widgets) throw new Error('Invalid settings');
+    store=openConfigStore(app.getPath('userData'));
+    const stored=store.load();
     config={...config,...stored};
     if(![15000,30000,60000].includes(config.interval)) config.interval=15000;
-    if(config.token) token=(await safeStorage.decryptStringAsync(Buffer.from(config.token,'base64'))).result;
-  } catch(e) {if(e.code!=='ENOENT')startupError='Не удалось прочитать настройки. Подключите GitLab заново.';}
+    if(!stored)await persist();
+  } catch {
+    store?.close();store=null;
+    dialog.showErrorBox('Pipeline Desk','Не удалось открыть локальную базу настроек. Данные сохранены. Проверьте доступ к папке приложения в AppData и повторите запуск.');
+    app.quit();return;
+  }
+  try{if(config.token)token=(await safeStorage.decryptStringAsync(Buffer.from(config.token,'base64'))).result;}
+  catch{startupError='Не удалось расшифровать токен. Подключите GitLab заново.';}
   overview=createWindow();
   tray=new Tray(nativeImage.createFromPath(path.join(__dirname,'../assets/icon.png')).resize({width:20,height:20}));
   tray.setToolTip('Pipeline Desk');
@@ -273,5 +272,15 @@ if(single) app.whenReady().then(async () => {
   }else refresh();
 });
 app.on('second-instance',showOverview);
-app.on('before-quit',()=>{quitting=true;clearTimeout(timer);});
+app.on('before-quit',()=>{
+  quitting=true;clearTimeout(timer);
+  if(!store)return;
+  for(const [key,w]of widgets)if(!w.isDestroyed()){
+    const bounds=w.getBounds();
+    config.widgets[key]={...config.widgets[key],bounds,viewHeights:{...config.widgets[key]?.viewHeights,[widgetView(key)]:bounds.height},pinned:w.isAlwaysOnTop()};
+  }
+  if(overview&&!overview.isDestroyed())config.bounds=overview.getNormalBounds();
+  try{store.save(config);}catch{dialog.showErrorBox('Pipeline Desk','Не удалось сохранить последние настройки окна. Предыдущие данные в базе сохранены.');}
+});
+app.on('will-quit',()=>{store?.close();store=null;});
 app.on('window-all-closed',()=>{});

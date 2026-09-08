@@ -37,7 +37,13 @@
 
 Первый запуск показывает **демо**, а не актуальное состояние проектов. Пример `supply-demand-backend` основан на предоставленном скриншоте; остальные проекты и статусы иллюстративные. Подключение к реальному GitLab заменяет демонстрацию вашими проектами.
 
-Токен шифруется Windows DPAPI через Electron safeStorage; в интерфейс обратно не передаётся. Настройки находятся в `%APPDATA%/Pipeline Desk/settings.json`. Приложение выполняет только GET-запросы к GitLab. Запуск, отмена, повтор заданий и деплой не реализованы.
+Подключение, проекты, группы, параметры обновления и настройки окон хранятся локально в SQLite: `%APPDATA%/Pipeline Desk/config.sqlite`. Устанавливать SQLite отдельно не нужно: приложение использует встроенный `node:sqlite`. Таблица `settings` содержит параметры, таблица `credentials` — зашифрованный токен в BLOB. Изменения записываются одной транзакцией.
+
+Токен шифруется Windows DPAPI через Electron safeStorage и не передаётся обратно в интерфейс. При первом запуске после обновления данные автоматически переносятся из `settings.json`, включая уже зашифрованный токен. Старый JSON остаётся неизменной резервной копией; после переноса приложение читает и обновляет только SQLite. Отключение удаляет токен из активной базы. При ошибке открытия базы приложение сохраняет исходные файлы и сообщает об ошибке.
+
+Для резервной копии закройте приложение и сохраните всю папку `%APPDATA%/Pipeline Desk`: она также содержит данные ключа шифрования Electron и настройки внешнего вида. Во время работы рядом с базой могут находиться служебные файлы `config.sqlite-wal` и `config.sqlite-shm`. Файлы базы и авторизации исключены из Git.
+
+Приложение выполняет только GET-запросы к GitLab. Запуск, отмена, повтор заданий и деплой не реализованы.
 
 Если в настройках приложения задан `netrcPath`, оно читает запись `machine` только для выбранного сервера. В поле `password` нужен API-токен, обычный пароль GitLab не подходит. Для `login oauth2` используется Bearer, иначе PRIVATE-TOKEN. Запись `default` игнорируется. После успешного импорта токен сохраняется зашифрованным. При первом подключении файл используется автоматически; после ошибки повторные попытки останавливаются. Исправленный файл можно перечитать кнопкой **Повторить из .netrc**. Содержимое файла и его путь не передаются в интерфейс.
 
@@ -61,6 +67,7 @@ node tests/setup.mjs
 node tests/groups-ui.mjs
 node tests/widget-views.mjs
 node tests/full-group-layout.mjs
+node tests/storage-electron.mjs
 npm run package
 npm run preview
 ```
@@ -69,4 +76,4 @@ npm run preview
 
 Проверки API используют фикстуры: повторные задания, optional failures, manual/canceled, пагинация, read-only запросы, неверный токен и rate limit. Electron-проверки охватывают интерфейс, настоящие окна, закрепление, восстановление, защищённое сохранение токена, импорт .netrc, поиск и массовый выбор проектов. Успешное подключение к реальному GitLab требует действующего API-токена.
 
-API: [GitLab pipelines](https://docs.gitlab.com/api/pipelines/), [GitLab jobs](https://docs.gitlab.com/api/jobs/), [GitLab groups](https://docs.gitlab.com/api/groups/), [personal access tokens](https://docs.gitlab.com/user/profile/personal_access_tokens/), [Electron safeStorage](https://www.electronjs.org/docs/latest/api/safe-storage).
+API: [GitLab pipelines](https://docs.gitlab.com/api/pipelines/), [GitLab jobs](https://docs.gitlab.com/api/jobs/), [GitLab groups](https://docs.gitlab.com/api/groups/), [personal access tokens](https://docs.gitlab.com/user/profile/personal_access_tokens/), [Electron safeStorage](https://www.electronjs.org/docs/latest/api/safe-storage), [Node.js SQLite](https://nodejs.org/api/sqlite.html).

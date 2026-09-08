@@ -11,3 +11,5 @@ _netrc
 !.env.example
 settings.json
 settings.json.*
+*.sqlite
+*.sqlite-*

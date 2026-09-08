@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import {demoProjects} from '../ui/demo.js';
+import {readConfig} from '../electron/storage.cjs';
 
 const root=path.resolve('.'),profile=await fs.mkdtemp(path.join(os.tmpdir(),'pipeline-desk-views-'));
 const shots=path.join(root,'.impeccable/review');await fs.mkdir(shots,{recursive:true});
@@ -35,7 +36,7 @@ try{
   await widget.locator('.pipeline-stage-block').first().waitFor();
   const restoredHeight=await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('widget=')).getBounds().height);
   assert.ok(Math.abs(restoredHeight-resizedHeight)<=2,'Restores the stage-view height within Windows fractional-DPI rounding');
-  const stored=JSON.parse(await fs.readFile(path.join(profile,'settings.json'),'utf8'));
+  const stored=readConfig(profile);
   assert.equal(stored.widgets['demo-group-platform'].view,'stages');
   await app.close();app=null;
   app=await electron.launch({args:[root],env});await app.firstWindow();

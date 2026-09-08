@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 import {fileURLToPath} from 'node:url';
+import {readConfig} from '../electron/storage.cjs';
 const root=path.resolve(fileURLToPath(new URL('..',import.meta.url)));
 const profile=await fs.mkdtemp(path.join(os.tmpdir(),'pipeline-desk-test-'));
 const shots=path.join(root,'.impeccable/review');await fs.mkdir(shots,{recursive:true});
@@ -84,7 +85,7 @@ try{
   await restored.locator('#add-form button[type="submit"]').click();
   await restored.locator('.pipeline-card[data-status="running"]').waitFor();
   assert.equal(await restored.locator('.pipeline-card').count(),1);
-  const saved=await fs.readFile(path.join(profile,'settings.json'),'utf8');
+  const saved=JSON.stringify(readConfig(profile));
   assert.equal(saved.includes('test-token-never-real'),false);
   assert.equal(JSON.parse(saved).projects[0].id,42);
   await app.evaluate(()=>{globalThis.fakeStatus='failed';});

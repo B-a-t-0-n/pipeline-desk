@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import {readConfig,DATABASE_NAME} from '../electron/storage.cjs';
 const root=path.resolve('.');
 const profile=await fs.mkdtemp(path.join(os.tmpdir(),'pipeline-desk-setup-'));
 const netrcPath=path.join(profile,'.netrc');
@@ -77,7 +78,7 @@ try{
   await page.locator('#project-search').fill('missing');
   await page.locator('#catalog-status').filter({hasText:'Проекты не найдены'}).waitFor();
   await page.keyboard.press('Escape');
-  const saved=await fs.readFile(path.join(profile,'settings.json'),'utf8');
+  const saved=JSON.stringify(readConfig(profile));
   assert.equal(saved.includes('fixture-pat'),false);
   assert.deepEqual(JSON.parse(saved).projects.map(p=>p.id),[42,43]);
   assert.equal(JSON.parse(saved).netrcFailed,false);
@@ -92,7 +93,9 @@ try{
   assert.equal(await restored.locator('#token-input').inputValue(),'');
   assert.equal(await restored.locator('#token-input').evaluate(el=>el.required),false);
   await restored.locator('#disconnect-button').click();
-  assert.equal(JSON.parse(await fs.readFile(path.join(profile,'settings.json'),'utf8')).netrcAuto,false);
+  assert.equal(readConfig(profile).netrcAuto,false);
+  assert.equal(readConfig(profile).token,'');
+  for(const name of await fs.readdir(profile))if(name.startsWith(DATABASE_NAME))assert.equal((await fs.readFile(path.join(profile,name))).includes(Buffer.from('fixture-pat')),false);
   await app.close();app=null;
   // Narrow rendering uses the same production files with a non-secret preview bridge.
   browser=await chromium.launch({channel:'msedge',headless:true});
