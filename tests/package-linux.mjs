@@ -20,6 +20,11 @@ try {
   const {stdout: contents} = await exec('dpkg-deb', ['--contents', deb]);
   assert.ok(contents.trim().split('\n').every(line => /root\/root/.test(line)), 'Package files must belong to root');
   assert.ok(!contents.split('\n').some(line => /^[^ ]*[sS]/.test(line)), 'Package must not contain setuid/setgid files');
+  for (const entry of contents.trim().split('\n')) {
+    const mode = entry.split(' ', 1)[0];
+    if (mode.startsWith('d')) assert.equal(mode, 'drwxr-xr-x', `Every installed directory must be traversable by ordinary users: ${entry}`);
+    else if (mode.startsWith('-')) assert.ok(['-rw-r--r--', '-rwxr-xr-x'].includes(mode), `Installed files must be readable without group/other write access: ${entry}`);
+  }
   await exec('dpkg-deb', ['--extract', deb, extracted]);
   await exec('dpkg-deb', ['--control', deb, path.join(extracted, 'DEBIAN')]);
   const launcher = await fs.readFile(path.join(extracted, 'usr/bin/pipeline-desk'), 'utf8');

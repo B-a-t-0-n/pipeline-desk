@@ -32,6 +32,16 @@ const [application] = await packager({
 });
 const staging = await fs.mkdtemp(path.join(os.tmpdir(), 'pipeline-desk-deb-'));
 const target = path.join(output, `pipeline-desk_${pkg.version}_amd64.deb`);
+async function normalizePermissions(directory) {
+  // Packager's temporary directory is private (0700). The installed root-owned
+  // tree must be readable/traversable by users, with no group-writable or setuid files.
+  await fs.chmod(directory, 0o755);
+  for (const entry of await fs.readdir(directory, {withFileTypes: true})) {
+    const file = path.join(directory, entry.name);
+    if (entry.isDirectory()) await normalizePermissions(file);
+    else if (entry.isFile()) await fs.chmod(file, (await fs.stat(file)).mode & 0o111 ? 0o755 : 0o644);
+  }
+}
 try {
   async function write(relative, contents, mode = 0o644) {
     const file = path.join(staging, relative);
@@ -40,8 +50,6 @@ try {
   }
   await fs.mkdir(path.join(staging, 'opt'), {recursive: true});
   await fs.cp(application, path.join(staging, 'opt/pipeline-desk'), {recursive: true});
-  // Use user namespaces through the AppArmor profile, not a setuid executable.
-  await fs.chmod(path.join(staging, 'opt/pipeline-desk/chrome-sandbox'), 0o755);
   await write('usr/bin/pipeline-desk', '#!/bin/sh\nexec /opt/pipeline-desk/pipeline-desk --ozone-platform=x11 "$@"\n', 0o755);
   await write('usr/share/applications/pipeline-desk.desktop', await fs.readFile(path.join(root, 'packaging/linux/pipeline-desk.desktop')));
   await write('usr/share/icons/hicolor/scalable/apps/pipeline-desk.svg', await fs.readFile(path.join(root, 'assets/icon.svg')));
@@ -65,6 +73,7 @@ Description: GitLab pipeline widgets for Ubuntu
  Monitor GitLab pipelines and stages in pinned desktop windows.
  Supports Ubuntu 24.04 LTS amd64 using X11 or XWayland.
 `);
+  await normalizePermissions(staging);
   await exec('dpkg-deb', ['--root-owner-group', '-Zxz', '--build', staging, target], {maxBuffer: 1024 * 1024});
   console.log(target);
 } finally {
