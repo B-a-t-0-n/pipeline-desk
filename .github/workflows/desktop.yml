@@ -28,12 +28,12 @@ jobs:
       - name: Install desktop test tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y xvfb openbox dbus-x11 gnome-keyring desktop-file-utils apparmor-utils x11-utils
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y xvfb openbox dbus-x11 gnome-keyring desktop-file-utils apparmor-utils x11-utils
       - run: npm test
       - run: npm run package:linux
       - name: Install the Debian package and allow the development Electron sandbox
         run: |
-          sudo apt-get install -y ./release/pipeline-desk_*_amd64.deb
+          sudo env DEBIAN_FRONTEND=noninteractive apt-get install -y ./release/pipeline-desk_*_amd64.deb
           cat > "$RUNNER_TEMP/pipeline-desk-tests" <<EOF
           abi <abi/4.0>,
           include <tunables/global>

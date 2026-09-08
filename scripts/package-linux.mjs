@@ -60,7 +60,7 @@ Maintainer: Pipeline Desk contributors <noreply@github.com>
 Homepage: https://github.com/B-a-t-0-n/pipeline-desk
 Installed-Size: ${Number.parseInt(size, 10)}
 Depends: apparmor (>= 4.0), libgtk-3-0t64, libnss3, libnspr4, libasound2t64, libgbm1, libdrm2, libx11-6, libxcb1, libxcomposite1, libxdamage1, libxext6, libxfixes3, libxrandr2, libxkbcommon0, libdbus-1-3, libatk1.0-0t64, libatk-bridge2.0-0t64, libatspi2.0-0t64, libcups2t64, libsecret-1-0, libnotify4, libexpat1, libglib2.0-0t64, libc6 (>= 2.35), libstdc++6, libgcc-s1, dbus-user-session, gnome-keyring, xwayland
-Recommends: gnome-shell-extension-appindicator
+Suggests: gnome-shell-extension-appindicator
 Description: GitLab pipeline widgets for Ubuntu
  Monitor GitLab pipelines and stages in pinned desktop windows.
  Supports Ubuntu 24.04 LTS amd64 using X11 or XWayland.
