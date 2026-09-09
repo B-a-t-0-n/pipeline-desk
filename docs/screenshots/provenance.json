@@ -1,0 +1,11 @@
+{
+  "sourceCommit": "fa05b2e5e2e91ed2c5898e60120893b390106d55",
+  "capturedAt": "2026-09-09",
+  "method": "Playwright screenshots of the Windows Electron app using a new isolated profile and built-in fictional demo data. Reduced motion enabled; no image edits.",
+  "images": {
+    "overview.png": "Full overview in the dark theme, with all six demo projects.",
+    "project-widget.png": "Native project widget in the detailed view.",
+    "group-widget.png": "Native demo group widget in the stages view.",
+    "connection.png": "First-run connection dialog with empty server and token fields, cropped to the dialog."
+  }
+}
