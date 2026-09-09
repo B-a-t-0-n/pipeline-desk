@@ -16,6 +16,14 @@ try{
   assert.equal(await page.evaluate(async()=> (await window.desk.snapshot()).desktop),true);
   assert.equal((await fs.readFile(path.join(env.PIPELINE_DESK_PROFILE,DATABASE_NAME))).subarray(0,16).toString(),'SQLite format 3\0');
   assert.equal(readConfig(env.PIPELINE_DESK_PROFILE).interval,15000);
+  await page.locator('#settings-button').click();
+  await page.locator('.setup-details summary').click();
+  await page.locator('#interval-input').selectOption('5000');
+  await page.locator('#interval-input').selectOption('10000');
+  await page.evaluate(()=>window.desk.settings({interval:5000}));
+  assert.equal(readConfig(env.PIPELINE_DESK_PROFILE).interval,5000);
+  await page.keyboard.press('Escape');
+  await page.locator('#settings-dialog').waitFor({state:'hidden'});
   const opened=app.waitForEvent('window');
   await page.getByRole('button',{name:'Закрепить виджет web-app-backend',exact:true}).click();
   const widget=await opened;await widget.locator('.pipeline-card').waitFor();
@@ -37,5 +45,5 @@ try{
   assert.equal(await group.locator('.pipeline-card').count(),6);
   assert.equal(await group.locator('.pipeline-card').evaluateAll(cards=>cards.every(card=>card.querySelector('.card-bottom').getBoundingClientRect().bottom<=card.getBoundingClientRect().bottom+1)),true,'Packaged detailed cards must not clip their content');
   assert.equal(await group.locator('.group-body').evaluate(el=>el.scrollHeight>el.clientHeight),true);
-  console.log('PASS: packaged Windows EXE, SQLite storage, sandboxed preload, native widget, three views, six detailed cards without clipping.');
+  console.log('PASS: packaged Windows EXE, faster polling options, SQLite storage, sandboxed preload, native widget, three views, six detailed cards without clipping.');
 }finally{await app.close();}

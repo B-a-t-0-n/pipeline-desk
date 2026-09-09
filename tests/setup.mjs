@@ -1,4 +1,5 @@
 import {_electron as electron,chromium} from 'playwright';
+import {expect} from '@playwright/test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -48,6 +49,8 @@ try{
   assert.equal(await page.locator('#settings-dialog input:visible').count(),1);
   assert.equal(await page.locator('#host-input').inputValue(),'https://git.example.invalid');
   await page.screenshot({path:path.join(shots,'setup.png')});
+  await page.locator('.setup-details summary').click();
+  await page.locator('#interval-input').selectOption('5000');
   await page.locator('#create-token-button').click();
   const tokenUrl=new URL((await app.evaluate(()=>globalThis.openedUrls))[0]);
   assert.equal(tokenUrl.origin,'https://git.example.invalid');
@@ -82,14 +85,33 @@ try{
   assert.equal(saved.includes('fixture-pat'),false);
   assert.deepEqual(JSON.parse(saved).projects.map(p=>p.id),[42,43]);
   assert.equal(JSON.parse(saved).netrcFailed,false);
+  assert.equal(JSON.parse(saved).interval,5000);
+  const pipelineRequests=()=>app.evaluate(()=>globalThis.apiCalls.filter(route=>route.endsWith('/pipelines')).length);
+  const beforePoll=await pipelineRequests();
+  await expect.poll(pipelineRequests,{timeout:9000}).toBeGreaterThan(beforePoll);
+  await assert.rejects(page.evaluate(()=>window.desk.settings({interval:0})),/Недопустимый интервал/);
+  assert.equal(readConfig(profile).interval,5000);
   const snapshot=await page.evaluate(()=>window.desk.snapshot());
   assert.equal('token' in snapshot,false);assert.equal('netrcPath' in snapshot,false);
   await app.close();app=null;
   app=await electron.launch({args:[root],env});
-  const restored=await app.firstWindow();
+  let restored=await app.firstWindow();
   await restored.locator('.pipeline-card[data-project="42:"]').waitFor();
   assert.equal(await restored.evaluate(async()=>(await window.desk.snapshot()).connected),true);
   await restored.locator('#settings-button').click();
+  assert.equal(await restored.locator('#interval-input').inputValue(),'5000');
+  await restored.locator('.setup-details summary').click();
+  await restored.locator('#interval-input').selectOption('10000');
+  await restored.locator('#connect-submit').click();
+  await expect(restored.locator('#settings-dialog')).not.toBeVisible();
+  assert.equal(readConfig(profile).interval,10000);
+  await app.close();app=null;
+  app=await electron.launch({args:[root],env});
+  restored=await app.firstWindow();
+  await restored.locator('.pipeline-card[data-project="42:"]').waitFor();
+  assert.equal((await restored.evaluate(()=>window.desk.snapshot())).interval,10000);
+  await restored.locator('#settings-button').click();
+  assert.equal(await restored.locator('#interval-input').inputValue(),'10000');
   assert.equal(await restored.locator('#token-input').inputValue(),'');
   assert.equal(await restored.locator('#token-input').evaluate(el=>el.required),false);
   await restored.locator('#disconnect-button').click();
@@ -122,5 +144,5 @@ try{
   assert.equal(await narrow.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   assert.equal(await narrow.locator('#add-dialog').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
   assert.deepEqual(errors,[]);
-  console.log('PASS: saved server/token link, .netrc retry, encrypted persistence, automatic saved login, catalog pagination/search/multi-select, no credential exposure, narrow first-run setup and picker.');
+  console.log('PASS: five-second automatic polling, five/ten-second interval persistence, invalid interval rejection, saved server/token link, .netrc retry, encrypted persistence, automatic saved login, catalog pagination/search/multi-select, no credential exposure, narrow first-run setup and picker.');
 }finally{if(app)await app.close().catch(()=>{});if(browser)await browser.close();}

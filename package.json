@@ -1,7 +1,7 @@
 {
   "name": "pipeline-desk",
   "productName": "Pipeline Desk",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Компактные виджеты GitLab для рабочего стола",
   "main": "electron/main.cjs",

@@ -56,7 +56,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
       <input id="token-input" name="token" type="password" placeholder="Вставьте токен один раз" autocomplete="off" spellcheck="false" aria-describedby="credential-note settings-error">
       <p class="field-note" id="credential-note">Сохраним автоматически. Повторный ввод не нужен.</p>
       <button type="button" class="secondary-button netrc-button" id="netrc-button" hidden><span data-icon="refresh"></span><span id="netrc-label">Использовать .netrc</span></button>
-      <details class="setup-details"><summary>Дополнительно</summary><div class="setting-row"><label for="interval-input">Обновление</label><select id="interval-input" name="interval"><option value="15000">Каждые 15 сек.</option><option value="30000">Каждые 30 сек.</option><option value="60000">Каждую минуту</option></select></div></details>
+      <details class="setup-details"><summary>Дополнительно</summary><div class="setting-row"><label for="interval-input">Обновление</label><select id="interval-input" name="interval"><option value="5000">Каждые 5 сек.</option><option value="10000">Каждые 10 сек.</option><option value="15000" selected>Каждые 15 сек.</option><option value="30000">Каждые 30 сек.</option><option value="60000">Каждую минуту</option></select></div></details>
       <p class="form-error" role="alert" id="settings-error"></p>
       <div class="dialog-actions"><button type="button" class="text-button danger-text" id="disconnect-button" hidden>Отключить</button><button class="primary-button" id="connect-submit" type="submit">Подключить</button></div>
     </form>

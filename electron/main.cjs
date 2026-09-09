@@ -5,6 +5,7 @@ const {normalizeHost,parseProject,createClient} = require('./gitlab.cjs');
 const {readNetrc} = require('./netrc.cjs');
 const {createGroupService,groupProjectKeys}=require('./groups.cjs');
 const {openConfigStore}=require('./storage.cjs');
+const POLL_INTERVALS=[5000,10000,15000,30000,60000];
 
 if (process.env.PIPELINE_DESK_PROFILE) app.setPath('userData', process.env.PIPELINE_DESK_PROFILE);
 const single = app.requestSingleInstanceLock();
@@ -207,7 +208,7 @@ register('removeProject',async key => {
   delete next.widgets[key];await persist(next);config=next;widgets.get(key)?.destroy();widgets.delete(key);data.delete(key);broadcast();return snapshot();
 });
 register('settings',async input => {
-  if(![15000,30000,60000].includes(input.interval)) throw new Error('Недопустимый интервал.');
+  if(!POLL_INTERVALS.includes(input.interval)) throw new Error('Недопустимый интервал.');
   const next={...config,interval:input.interval};await persist(next);config=next;schedule();broadcast();return snapshot();
 });
 register('refresh',()=>refresh(true));
@@ -253,7 +254,7 @@ if(single) app.whenReady().then(async () => {
     store=openConfigStore(app.getPath('userData'));
     const stored=store.load();
     config={...config,...stored};
-    if(![15000,30000,60000].includes(config.interval)) config.interval=15000;
+    if(!POLL_INTERVALS.includes(config.interval)) config.interval=15000;
     if(!stored)await persist();
   } catch {
     store?.close();store=null;
