@@ -7,7 +7,7 @@ const env={...process.env,PIPELINE_DESK_PROFILE:await fs.mkdtemp(path.join(os.tm
 const app=await electron.launch({args:[path.resolve('.')],env});
 try{
   const page=await app.firstWindow();await page.locator('.pipeline-card').first().waitFor();
-  const opened=app.waitForEvent('window');await page.getByRole('button',{name:'Закрепить виджет supply-demand-backend',exact:true}).click();
+  const opened=app.waitForEvent('window');await page.getByRole('button',{name:'Закрепить виджет web-app-backend',exact:true}).click();
   const widget=await opened;await widget.locator('.pipeline-card').waitFor();
   const regions=await widget.evaluate(()=>({title:getComputedStyle(document.querySelector('.widget-bar')).getPropertyValue('-webkit-app-region'),pin:getComputedStyle(document.querySelector('[data-action="window-pin"]')).getPropertyValue('-webkit-app-region'),close:getComputedStyle(document.querySelector('[data-action="window-close"]')).getPropertyValue('-webkit-app-region')}));
   assert.deepEqual(regions,{title:'drag',pin:'no-drag',close:'no-drag'});

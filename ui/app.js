@@ -62,7 +62,7 @@ function renderCard(p,widget=false,omitHeading=false){
 }
 function groups(){
   if(state.connected)return state.groups||[];
-  return [{key:'demo-group-platform',name:'Supply demand',memberKeys:['demo-0','demo-1'],sources:[],demo:true},{key:'demo-group-services',name:'Сервисы',memberKeys:['demo-3','demo-5'],sources:[],demo:true}].map(g=>({...g,pinned:state.widgets.includes(g.key)}));
+  return [{key:'demo-group-platform',name:'Веб-приложение',memberKeys:['demo-0','demo-1'],sources:[],demo:true},{key:'demo-group-services',name:'Сервисы',memberKeys:['demo-3','demo-5'],sources:[],demo:true}].map(g=>({...g,pinned:state.widgets.includes(g.key)}));
 }
 function repoButton(p){return `<button class="icon-button" data-action="external" data-url="${escape(p.webUrl||'')}" aria-label="Открыть репозиторий ${escape(p.name)}" title="Открыть репозиторий">${icon('external')}</button>`;}
 function widgetView(){

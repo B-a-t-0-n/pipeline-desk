@@ -5,7 +5,7 @@ const {normalizeHost,parseProject,stageStatus,summarizeJobs,createClient}=requir
 test('URLs keep self-hosted subpaths and prevent token disclosure to other origins',()=>{
   assert.equal(normalizeHost('https://git.example.com/gitlab/'),'https://git.example.com/gitlab');
   for(const value of ['http://git.example.com','https://user:pass@git.example.com','https://git.example.com?token=x'])assert.throws(()=>normalizeHost(value));
-  assert.equal(parseProject('https://git.example.com/gitlab/team/sub/backend/-/pipelines/8553','https://git.example.com/gitlab'),'team/sub/backend');
+  assert.equal(parseProject('https://git.example.com/gitlab/team/sub/backend/-/pipelines/1042','https://git.example.com/gitlab'),'team/sub/backend');
   assert.equal(parseProject('team/backend.git','https://git.example.com'),'team/backend');
   assert.throws(()=>parseProject('https://evil.example/team/repo','https://git.example.com'));
   assert.throws(()=>parseProject('https://git.example.com/gitlab-other/team/repo','https://git.example.com/gitlab'));

@@ -305,7 +305,7 @@ Under `prefers-reduced-motion: reduce`, CSS animations and transitions stop, scr
 
 ### Connection and project selection
 
-The connection dialog exposes one token input. A compact server row retains identity and an explicit change action; polling settings live in native details. The token creation link carries the app name and read_api scope to GitLab. A configured .netrc can be used without entering its path; a rejected credential gets a concise inline explanation and an explicit retry.
+On first connection, the dialog exposes an empty server URL field and a token input, with focus on the server. After a server is saved, a compact server row retains identity and an explicit change action; polling settings live in native details. The token creation link carries the app name and read_api scope to the entered GitLab server. A configured .netrc can be used without entering its path; a rejected credential gets a concise inline explanation and an explicit retry.
 
 The project dialog opens with a searchable list of native checkboxes. Names and namespaces identify each project; a pale blue selected surface and a check communicate selection together. Selection survives searches and pagination, and the action shows the selected count. A secondary mode retains project links and optional branches. Both dialogs reuse the existing theme, focus outlines and reduced-motion behavior.
 

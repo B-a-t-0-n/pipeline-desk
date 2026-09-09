@@ -15,7 +15,7 @@ try{
     globalThis.membersChanged=false;globalThis.openedUrls=[];shell.openExternal=async url=>{globalThis.openedUrls.push(url);};
     globalThis.fetch=async url=>{
       const u=new URL(url),route=u.pathname;
-      const project=id=>({id,path:{42:'supply-demand-backend',43:'supply-demand-frontend',44:'api-gateway',45:'new-service'}[id],namespace:{full_path:'AEDON / platform'},web_url:`https://git.groups.invalid/team/${id}`});
+      const project=id=>({id,path:{42:'web-app-backend',43:'web-app-frontend',44:'api-gateway',45:'new-service'}[id],namespace:{full_path:'Demo / platform'},web_url:`https://git.groups.invalid/team/${id}`});
       const group=id=>({id,name:id===10?'Platform':'Services',full_path:id===10?'team':'team/services',parent_id:id===10?null:10,web_url:`https://git.groups.invalid/groups/${id}`});
       let body;
       if(route.endsWith('/user'))body={username:'fixture'};
@@ -32,7 +32,7 @@ try{
       return new Response(JSON.stringify(body));
     };
   });
-  await page.locator('#settings-button').click();await page.locator('#edit-server').click();
+  await page.locator('#settings-button').click();
   await page.locator('#host-input').fill('https://git.groups.invalid');await page.locator('#token-input').fill('fixture-only');await page.locator('#connect-submit').click();
   await page.locator('#add-dialog').waitFor({state:'visible'});await page.keyboard.press('Escape');
   await page.locator('#new-group-button').click();await page.locator('#group-name').fill('Работа');
@@ -47,7 +47,7 @@ try{
   assert.equal(await widget.locator('.compact-project').count(),2);
   assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('widget=')).isAlwaysOnTop()),true);
   await widget.screenshot({path:path.join(shots,'group-widget.png'),animations:'disabled'});
-  await widget.getByRole('button',{name:'Открыть репозиторий supply-demand-backend',exact:true}).click();
+  await widget.getByRole('button',{name:'Открыть репозиторий web-app-backend',exact:true}).click();
   assert.equal((await app.evaluate(()=>globalThis.openedUrls)).at(-1),'https://git.groups.invalid/team/42');
   await widget.getByLabel('Вид виджета',{exact:true}).selectOption('full');await widget.locator('.pipeline-card').first().waitFor();
   await widget.getByLabel('Вид виджета',{exact:true}).selectOption('compact');await widget.locator('.compact-project').first().waitFor();
@@ -68,7 +68,7 @@ try{
   assert.equal(await mergedWidget.locator('.compact-project[data-project="44:"]').count(),0);
   assert.equal(await mergedWidget.locator('.compact-project').count(),3);
   // Individual widgets become short native windows and retain pin behavior.
-  const soloCreated=app.waitForEvent('window');await page.getByRole('button',{name:'Закрепить виджет supply-demand-backend',exact:true}).click();
+  const soloCreated=app.waitForEvent('window');await page.getByRole('button',{name:'Закрепить виджет web-app-backend',exact:true}).click();
   const solo=await soloCreated;await solo.locator('.pipeline-card').waitFor();await solo.getByLabel('Вид виджета',{exact:true}).selectOption('compact');
   await solo.locator('.solo-summary').waitFor();
   const shortWindow=await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>new URL(w.webContents.getURL()).searchParams.get('widget')==='42:').getBounds());

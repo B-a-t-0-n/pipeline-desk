@@ -50,8 +50,8 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
   <dialog id="settings-dialog" closedby="closerequest" aria-labelledby="settings-title">
     <form id="settings-form" method="post">
       <div class="dialog-heading"><h2 id="settings-title">Подключение GitLab</h2><button type="button" class="icon-button" data-close aria-label="Закрыть" data-icon="x"></button></div>
-      <div class="server-choice"><span data-icon="repo"></span><span id="server-name"></span><button type="button" class="text-button" id="edit-server" aria-expanded="false" aria-controls="host-field">Изменить</button></div>
-      <div id="host-field" class="form-field" hidden><label for="host-input">Адрес GitLab</label><input id="host-input" name="host" type="url" placeholder="https://gitlab.example.com" required autocomplete="url" spellcheck="false"></div>
+      <div class="server-choice" hidden><span data-icon="repo"></span><span id="server-name"></span><button type="button" class="text-button" id="edit-server" aria-expanded="true" aria-controls="host-field">Изменить</button></div>
+      <div id="host-field" class="form-field"><label for="host-input">Адрес GitLab</label><input id="host-input" name="host" type="url" placeholder="https://gitlab.example.com" required autocomplete="url" spellcheck="false" aria-describedby="host-note"><p id="host-note" class="field-note">Укажите https://gitlab.com или адрес вашего сервера.</p></div>
       <div class="token-label"><label for="token-input">Токен</label><button type="button" class="text-button" id="create-token-button">Получить токен<span data-icon="external"></span></button></div>
       <input id="token-input" name="token" type="password" placeholder="Вставьте токен один раз" autocomplete="off" spellcheck="false" aria-describedby="credential-note settings-error">
       <p class="field-note" id="credential-note">Сохраним автоматически. Повторный ввод не нужен.</p>

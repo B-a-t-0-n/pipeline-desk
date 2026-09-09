@@ -1,12 +1,14 @@
 import {icon} from './icons.js';
 const $=selector=>document.querySelector(selector);
 const escape=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const defaultHost='https://nzkjew7r.npo-enel.ru';
 
 export function installSetup({getState,updateState,notify}){
   const native=!!window.desk;
   let mode='list',items=[],selected=new Set(),nextPage=null,requestId=0,searchTimer,busy=false;
   function host(){return $('#host-input').value.trim();}
+  function editHost(value){
+    $('#host-field').hidden=!value;$('#edit-server').setAttribute('aria-expanded',String(value));
+  }
   function setConnectionBusy(value){
     $('#connect-submit').disabled=value;$('#netrc-button').disabled=value;$('#disconnect-button').disabled=value;
     $('#connect-submit').textContent=value?'Подключение…':getState().connected?'Сохранить':'Подключить';
@@ -17,14 +19,14 @@ export function installSetup({getState,updateState,notify}){
     $('#token-input').required=!s.connected&&(!s.netrcAvailable||s.netrcFailed||host().replace(/\/+$/,'')!==s.host);
   }
   function openSettings(){
-    const s=getState();$('#host-input').value=s.host||defaultHost;$('#token-input').value='';
+    const s=getState();$('#host-input').value=s.host||'';$('#token-input').value='';
     $('#token-input').placeholder=s.connected?'Сохранён · новый токен необязателен':'Вставьте токен один раз';
     $('#token-input').removeAttribute('aria-invalid');$('#settings-error').textContent='';
-    $('#interval-input').value=String(s.interval);$('#host-field').hidden=true;$('#edit-server').setAttribute('aria-expanded','false');
+    $('#interval-input').value=String(s.interval);editHost(!s.host);$('.server-choice').hidden=!s.host;
     $('#disconnect-button').hidden=!s.connected;$('#settings-dialog .setup-details').open=false;
     $('#credential-note').textContent=!native?'Подключение доступно в Windows-приложении.':s.netrcFailed&&!s.connected?'Данные .netrc не подошли. Нужен токен с правом read_api.':'Сохраним автоматически. Повторный ввод не нужен.';
     $('#netrc-label').textContent=s.netrcFailed?'Повторить из .netrc':'Использовать .netrc';
-    setConnectionBusy(false);updateServer();$('#settings-dialog').showModal();$('#token-input').focus();
+    setConnectionBusy(false);updateServer();$('#settings-dialog').showModal();$(s.host?'#token-input':'#host-input').focus();
   }
   async function connect(useNetrc=false){
     $('#settings-error').textContent='';
@@ -69,13 +71,14 @@ export function installSetup({getState,updateState,notify}){
     selected=new Set();items=[];nextPage=null;$('#add-form').reset();$('#add-error').textContent='';setMode('list');
     $('#add-dialog').showModal();loadProjects();$('#project-search').focus();
   }
-  $('#edit-server').addEventListener('click',()=>{const show=$('#host-field').hidden;$('#host-field').hidden=!show;$('#edit-server').setAttribute('aria-expanded',show);if(show)$('#host-input').focus();});
+  $('#edit-server').addEventListener('click',()=>{const show=$('#host-field').hidden||!host();editHost(show);if(show)$('#host-input').focus();});
   $('#host-input').addEventListener('input',updateServer);
+  $('#host-input').addEventListener('invalid',()=>editHost(true));
   $('#token-input').addEventListener('input',()=>{$('#token-input').removeAttribute('aria-invalid');$('#settings-error').textContent='';});
   $('#settings-form').addEventListener('submit',e=>{e.preventDefault();connect();});
   $('#netrc-button').addEventListener('click',()=>connect(true));
   $('#create-token-button').addEventListener('click',async()=>{
-    if(!$('#host-input').checkValidity()){$('#host-field').hidden=false;$('#host-input').reportValidity();return;}
+    if(!$('#host-input').checkValidity()){editHost(true);$('#host-input').reportValidity();return;}
     try{if(native)await window.desk.createToken(host());else{$('#settings-error').textContent='Откройте Windows-приложение, чтобы перейти в ваш GitLab.';}}catch(e){$('#settings-error').textContent=e.message;}
   });
   $('#disconnect-button').addEventListener('click',async()=>{try{updateState(await window.desk.disconnect());$('#token-input').value='';$('#settings-dialog').close();notify('GitLab отключён');}catch(e){$('#settings-error').textContent=e.message;}});

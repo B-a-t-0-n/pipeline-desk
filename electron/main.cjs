@@ -240,7 +240,8 @@ register('windowAction',async (action,event) => {
   if(action==='pin') {w.setAlwaysOnTop(!w.isAlwaysOnTop());const entry=[...widgets].find(([,win])=>win===w);if(entry){config.widgets[entry[0]]={...config.widgets[entry[0]],pinned:w.isAlwaysOnTop()};await persist();}return w.isAlwaysOnTop();}
 });
 register('openExternal',async raw => {
-  const url=new URL(raw),base=new URL(config.host || 'https://gitlab.com');
+  if(!config.host)throw new Error('Сначала укажите адрес GitLab в настройках.');
+  const url=new URL(raw),base=new URL(config.host);
   if(url.protocol!=='https:' || url.origin!==base.origin || url.username || url.password) throw new Error('Разрешены только ссылки подключённого GitLab.');
   await shell.openExternal(url.href);
 });

@@ -1,4 +1,5 @@
 import {_electron as electron} from 'playwright';
+import {expect} from '@playwright/test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -19,17 +20,46 @@ async function launch(){
 try{
   const page=await launch();
   assert.equal(await page.locator('.pipeline-card').count(),6);
+  assert.equal((await page.evaluate(()=>window.desk.snapshot())).host,'');
+  await app.evaluate(({shell})=>{
+    globalThis.openedUrls=[];shell.openExternal=async url=>{globalThis.openedUrls.push(url);};
+    globalThis.setupRequests=[];globalThis.fetch=async url=>{globalThis.setupRequests.push(String(url));throw new Error('Unexpected request before server selection');};
+  });
+  await page.locator('#settings-button').click();
+  assert.equal(await page.locator('#host-input').inputValue(),'');
+  assert.equal(await page.locator('#host-field').isVisible(),true);
+  assert.equal(await page.locator('#host-input').evaluate(el=>el===document.activeElement),true);
+  assert.equal(await page.locator('.server-choice').isVisible(),false);
+  await page.screenshot({path:path.join(shots,'setup-first-run.png')});
+  await page.locator('#create-token-button').click();
+  await page.locator('#token-input').fill('fixture-only');
+  await page.locator('#connect-submit').click();
+  assert.equal(await page.locator('#settings-dialog').isVisible(),true);
+  assert.deepEqual(await app.evaluate(()=>globalThis.setupRequests),[]);
+  assert.deepEqual(await app.evaluate(()=>globalThis.openedUrls),[]);
+  const noDefaultServer=await page.evaluate(async()=>{try{await window.desk.openExternal('https://gitlab.com');return false;}catch{return true;}});
+  assert.equal(noDefaultServer,true);
+  for(const host of ['https://gitlab.com','https://git.example/gitlab/']){
+    await page.locator('#host-input').fill(host);
+    await page.locator('#create-token-button').click();
+    await expect.poll(()=>app.evaluate(()=>globalThis.openedUrls.at(-1))).toBe(host.replace(/\/+$/,'')+'/-/user_settings/personal_access_tokens?name=Pipeline+Desk&scopes=read_api');
+  }
+  await page.keyboard.press('Escape');
+  await page.locator('#settings-button').click();
+  assert.equal(await page.locator('#host-input').inputValue(),'');
+  assert.equal(await page.locator('#token-input').inputValue(),'');
+  await page.keyboard.press('Escape');
   await page.screenshot({path:path.join(shots,'desktop.png')});
   await page.getByRole('button',{name:'Ошибки'}).click();assert.equal(await page.locator('.pipeline-card').count(),1);
   await page.getByRole('button',{name:'В работе'}).click();assert.equal(await page.locator('.pipeline-card').count(),2);
   await page.getByRole('button',{name:'Все',exact:false}).first().click();
   await page.getByRole('button',{name:'Список',exact:true}).click();assert.ok(await page.locator('#projects').evaluate(el=>el.classList.contains('list-view')));
   await page.getByRole('button',{name:'Карточки',exact:true}).click();
-  await page.getByRole('button',{name:'Пайплайн 8553',exact:true}).click();
+  await page.getByRole('button',{name:'Пайплайн 1042',exact:true}).click();
   await page.locator('#detail-dialog').waitFor({state:'visible'});assert.equal(await page.locator('.job-row').count(),4);
   await page.keyboard.press('Escape');
   const created=app.waitForEvent('window');
-  await page.getByRole('button',{name:'Закрепить виджет supply-demand-backend',exact:true}).click();
+  await page.getByRole('button',{name:'Закрепить виджет web-app-backend',exact:true}).click();
   const widget=await created;await widget.locator('.pipeline-card').waitFor();
   assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('widget=')).isAlwaysOnTop()),true);
   await widget.screenshot({path:path.join(shots,'widget.png')});
@@ -54,7 +84,9 @@ try{
   assert.equal(await app.evaluate(({BrowserWindow})=>BrowserWindow.getAllWindows().length),2);
   await app.evaluate(()=>{
     globalThis.fakeStatus='running';
+    globalThis.apiUrls=[];
     globalThis.fetch=async(url,options)=>{
+      globalThis.apiUrls.push(String(url));
       if(options.headers['PRIVATE-TOKEN']!=='test-token-never-real')return new Response('{}',{status:401});
       if(globalThis.fakeStatus==='offline')throw new Error('offline');
       const route=new URL(url).pathname;
@@ -71,8 +103,8 @@ try{
     };
   });
   await restored.getByRole('button',{name:'Настройки',exact:true}).click();
-  await restored.locator('#edit-server').click();
-  await restored.locator('#host-input').fill('https://git.example');
+  assert.equal(await restored.locator('#host-field').isVisible(),true);
+  await restored.locator('#host-input').fill('https://git.example/gitlab/');
   await restored.locator('#token-input').fill('wrong-token');
   await restored.locator('#connect-submit').click();
   await restored.locator('#settings-error').filter({hasText:'Токен недействителен'}).waitFor();
@@ -88,6 +120,13 @@ try{
   const saved=JSON.stringify(readConfig(profile));
   assert.equal(saved.includes('test-token-never-real'),false);
   assert.equal(JSON.parse(saved).projects[0].id,42);
+  assert.equal(JSON.parse(saved).host,'https://git.example/gitlab');
+  await restored.locator('#settings-button').click();
+  assert.equal(await restored.locator('#host-input').inputValue(),'https://git.example/gitlab');
+  assert.equal(await restored.locator('#host-field').isVisible(),false);
+  await restored.locator('#edit-server').click();
+  assert.equal(await restored.locator('#host-field').isVisible(),true);
+  await restored.keyboard.press('Escape');
   await app.evaluate(()=>{globalThis.fakeStatus='failed';});
   await restored.getByRole('button',{name:'Обновить',exact:true}).click();
   await restored.locator('.pipeline-card[data-status="failed"]').waitFor();
@@ -96,7 +135,10 @@ try{
   await restored.locator('.card-error').filter({hasText:'GitLab недоступен'}).waitFor();
   assert.ok(await restored.locator('.card-error').textContent());
   const blocked=await restored.evaluate(async()=>{try{await window.desk.openExternal('https://evil.example');return false;}catch{return true;}});assert.equal(blocked,true);
+  const apiUrls=await app.evaluate(()=>globalThis.apiUrls);
+  assert.ok(apiUrls.length>0);
+  assert.ok(apiUrls.every(url=>url.startsWith('https://git.example/gitlab/api/v4/')));
   assert.deepEqual(errors,[]);
-  console.log('PASS: filters, details, list, native pin/unpin, window restore, narrow layout, theme, reduced motion, connection errors, project, status refresh, offline cache, protected token, external URL restriction.');
+  console.log('PASS: empty first-run server, required URL, GitLab.com and self-hosted token links, saved custom server, filters, details, list, native pin/unpin, window restore, narrow layout, theme, reduced motion, connection errors, project, status refresh, offline cache, protected token, external URL restriction.');
   console.log('Screenshots: '+shots);
 }finally{if(app)await app.close().catch(()=>{});}

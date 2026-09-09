@@ -24,7 +24,7 @@ try{
     globalThis.fetch=async(url,options)=>{
       const u=new URL(url);globalThis.apiCalls.push(u.pathname);
       if(options.headers['PRIVATE-TOKEN']!=='fixture-pat')return new Response('{}',{status:401});
-      const project=id=>({id,path:id===42?'supply-demand-backend':id===43?'supply-demand-frontend':'platform-tools',namespace:{full_path:'AEDON / supply-demand-platform'},web_url:`https://git.example.invalid/group/${id}`});
+      const project=id=>({id,path:id===42?'web-app-backend':id===43?'web-app-frontend':'platform-tools',namespace:{full_path:'Demo / web-app'},web_url:`https://git.example.invalid/group/${id}`});
       let body,headers={};
       if(u.pathname.endsWith('/user'))body={username:'fixture-user'};
       else if(u.pathname.endsWith('/projects')){
@@ -99,10 +99,19 @@ try{
   await app.close();app=null;
   // Narrow rendering uses the same production files with a non-secret preview bridge.
   browser=await chromium.launch({channel:'msedge',headless:true});
+  const firstRun=await browser.newPage({viewport:{width:390,height:844}});
+  await firstRun.goto('http://127.0.0.1:4317/ui/index.html');
+  await firstRun.locator('#connection-button').click();
+  assert.equal(await firstRun.locator('#host-input').inputValue(),'');
+  assert.equal(await firstRun.locator('#host-field').isVisible(),true);
+  assert.equal(await firstRun.locator('#host-input').evaluate(el=>el===document.activeElement),true);
+  assert.equal(await firstRun.locator('#settings-dialog').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
+  await firstRun.screenshot({path:path.join(shots,'setup-first-run-narrow.png'),animations:'disabled'});
+  await firstRun.close();
   const narrow=await browser.newPage({viewport:{width:390,height:844}});
   await narrow.addInitScript(()=>{
     const state={connected:true,host:'https://git.example.invalid',projects:[],widgets:[],interval:15000};
-    window.desk={snapshot:async()=>state,onUpdate:()=>{},listProjects:async()=>({items:[{id:42,name:'supply-demand-backend',namespace:'AEDON / supply-demand-platform'},{id:43,name:'supply-demand-frontend-with-a-long-name',namespace:'AEDON / supply-demand-platform'}],nextPage:null})};
+    window.desk={snapshot:async()=>state,onUpdate:()=>{},listProjects:async()=>({items:[{id:42,name:'web-app-backend',namespace:'Demo / web-app'},{id:43,name:'web-app-frontend-with-a-long-name',namespace:'Demo / web-app'}],nextPage:null})};
   });
   await narrow.goto('http://127.0.0.1:4317/ui/index.html');
   await narrow.locator('#connection-button').click();
@@ -113,5 +122,5 @@ try{
   assert.equal(await narrow.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
   assert.equal(await narrow.locator('#add-dialog').evaluate(el=>el.scrollWidth<=el.clientWidth),true);
   assert.deepEqual(errors,[]);
-  console.log('PASS: one input, prefilled server/token link, .netrc retry, encrypted persistence, automatic saved login, catalog pagination/search/multi-select, no credential exposure, narrow setup and picker.');
+  console.log('PASS: saved server/token link, .netrc retry, encrypted persistence, automatic saved login, catalog pagination/search/multi-select, no credential exposure, narrow first-run setup and picker.');
 }finally{if(app)await app.close().catch(()=>{});if(browser)await browser.close();}

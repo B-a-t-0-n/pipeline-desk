@@ -3,6 +3,7 @@
 .server-choice>.icon{width:16px;height:16px}
 .server-choice .text-button{font-size:11px;padding:5px 0;color:var(--blue)}
 .form-field{margin-bottom:20px}.form-field label,#manual-project>label,.search-label{display:block;font-size:12px;margin-bottom:9px}
+.form-field .field-note{margin:8px 0 0}
 .token-label{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:9px;font-size:12px}
 .token-label .text-button{display:inline-flex;align-items:center;gap:6px;padding:3px 0;color:var(--blue);font-size:11px}
 .token-label .icon{width:12px;height:12px}.text-button:hover{text-decoration:underline;text-underline-offset:3px}

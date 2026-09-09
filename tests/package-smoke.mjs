@@ -17,7 +17,7 @@ try{
   assert.equal((await fs.readFile(path.join(env.PIPELINE_DESK_PROFILE,DATABASE_NAME))).subarray(0,16).toString(),'SQLite format 3\0');
   assert.equal(readConfig(env.PIPELINE_DESK_PROFILE).interval,15000);
   const opened=app.waitForEvent('window');
-  await page.getByRole('button',{name:'Закрепить виджет supply-demand-backend',exact:true}).click();
+  await page.getByRole('button',{name:'Закрепить виджет web-app-backend',exact:true}).click();
   const widget=await opened;await widget.locator('.pipeline-card').waitFor();
   assert.equal(await widget.evaluate(()=>document.documentElement.scrollHeight<=innerHeight),true);
   await widget.getByLabel('Вид виджета').selectOption('stages');await widget.locator('.solo-summary').waitFor();
