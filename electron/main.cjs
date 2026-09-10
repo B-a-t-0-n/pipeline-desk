@@ -1,17 +1,21 @@
-const {app,BrowserWindow,ipcMain,safeStorage,shell,screen,Tray,Menu,nativeImage,dialog} = require('electron');
+const {app,BrowserWindow,ipcMain,safeStorage,shell,screen,Tray,Menu,nativeImage,dialog,Notification} = require('electron');
 const path = require('node:path');
+const fs = require('node:fs');
 const {pathToFileURL} = require('node:url');
 const {normalizeHost,parseProject,createClient} = require('./gitlab.cjs');
 const {readNetrc} = require('./netrc.cjs');
 const {createGroupService,groupProjectKeys}=require('./groups.cjs');
 const {openConfigStore}=require('./storage.cjs');
+const {setSubscription,planNotifications}=require('./notifications.cjs');
 const POLL_INTERVALS=[5000,10000,15000,30000,60000];
 
 if (process.env.PIPELINE_DESK_PROFILE) app.setPath('userData', process.env.PIPELINE_DESK_PROFILE);
 const single = app.requestSingleInstanceLock();
 if (!single) app.quit();
-let config = {host:'',token:'',username:'',interval:15000,projects:[],groups:[],widgets:{},bounds:null,netrcPath:'',netrcFailed:false,netrcAuto:true,authMode:'private'};
+let config = {host:'',token:'',username:'',interval:15000,projects:[],groups:[],widgets:{},notifications:{},notificationState:{seen:{},delivered:{}},bounds:null,netrcPath:'',netrcFailed:false,netrcAuto:true,authMode:'private'};
 let token = '', data = new Map(), overview, tray, timer, refreshing, epoch = 0, lastUpdate = null, startupError = '', quitting = false, store;
+let notificationError='',notificationReady=false;
+const activeNotifications=new Set();
 const widgets = new Map();
 const pagePath = path.join(__dirname,'../ui/index.html');
 const pageUrl = pathToFileURL(pagePath).href;
@@ -38,10 +42,44 @@ async function persist(next = config) {
   store.save(next);
 }
 function snapshot() {
-  return {desktop:true,connected:!!token,host:config.host,username:config.username,interval:config.interval,updating:!!refreshing,lastUpdate,error:startupError,netrcAvailable:!!config.netrcPath,netrcFailed:!!config.netrcFailed,
+  return {desktop:true,connected:!!token,host:config.host,username:config.username,interval:config.interval,updating:!!refreshing,lastUpdate,error:startupError||notificationError,notifications:config.notifications,netrcAvailable:!!config.netrcPath,netrcFailed:!!config.netrcFailed,
     projects:config.projects.map(p => ({...p,...data.get(p.key),pinned:widgets.has(p.key)})),groups:config.groups.map(g=>({...g,memberKeys:groupProjectKeys(g),pinned:widgets.has(g.key),error:g.sources.find(s=>s.error)?.error||null})),widgets:[...widgets.keys()],widgetOptions:Object.fromEntries([...widgets.keys()].map(key=>[key,{compact:isCompact(key),view:widgetView(key)}]))};
 }
 function broadcast() { for (const w of BrowserWindow.getAllWindows()) if (!w.isDestroyed()) w.webContents.send('desk:update',snapshot()); }
+function prepareNotifications(){
+  if(!Notification.isSupported())throw new Error('Системные уведомления недоступны.');
+  if(notificationReady)return;
+  if(process.platform==='win32'&&app.isPackaged&&!process.env.PIPELINE_DESK_TEST){
+    const shortcut=path.join(app.getPath('appData'),'Microsoft/Windows/Start Menu/Programs/Pipeline Desk.lnk');
+    fs.mkdirSync(path.dirname(shortcut),{recursive:true});
+    if(!shell.writeShortcutLink(shortcut,'create',{target:process.execPath,cwd:path.dirname(process.execPath),appUserModelId:'local.pipeline-desk',toastActivatorClsid:app.toastActivatorCLSID,description:'Pipeline Desk',icon:process.execPath,iconIndex:0}))throw new Error('Не удалось включить уведомления Windows. Повторите попытку.');
+  }
+  notificationReady=true;notificationError='';
+}
+function reportNotificationError(){
+  notificationReady=false;notificationError='Не удалось показать уведомление Windows. Проверьте настройки уведомлений для Pipeline Desk.';
+  for(const w of BrowserWindow.getAllWindows())if(!w.isDestroyed())w.webContents.send('desk:notice',notificationError);
+  broadcast();
+}
+function deliverNotification(event){
+  const notification=new Notification({title:event.title,body:event.body,icon:path.join(__dirname,'../assets/icon.png')});
+  activeNotifications.add(notification);
+  notification.on('click',()=>{activeNotifications.delete(notification);openExternal(event.url).catch(showOverview);});
+  notification.on('close',()=>activeNotifications.delete(notification));
+  notification.on('failed',()=>{activeNotifications.delete(notification);reportNotificationError();});
+  // Keep recent objects alive for native click callbacks without unbounded growth.
+  if(activeNotifications.size>100)activeNotifications.delete(activeNotifications.values().next().value);
+  notification.show();
+}
+function checkNotifications(){
+  const plan=planNotifications(config,data);
+  if(JSON.stringify(config.notificationState)===JSON.stringify(plan.state))return;
+  if(plan.events.length)prepareNotifications();
+  const next={...config,notificationState:plan.state};
+  // Commit deduplication before showing any OS toast, including across hard exits.
+  store.save(next);config=next;
+  for(const event of plan.events)deliverNotification(event);
+}
 function schedule(delay = config.interval) { clearTimeout(timer); if(token && !quitting) timer = setTimeout(refresh,delay); }
 function refresh(forceGroups=false) {
   if (refreshing) return refreshing;
@@ -61,7 +99,7 @@ function refresh(forceGroups=false) {
       }
     }
     await Promise.all(Array.from({length:Math.min(3,pending.length)},worker));
-    if(generation===epoch) lastUpdate = new Date().toISOString();
+    if(generation===epoch){lastUpdate = new Date().toISOString();try{checkNotifications();}catch{reportNotificationError();}}
   })().finally(() => {refreshing=null;broadcast();schedule(delay);});
   broadcast();
   return refreshing.then(snapshot);
@@ -123,7 +161,7 @@ async function connect(input,authMode='private') {
   if(!await safeStorage.isAsyncEncryptionAvailable()) throw new Error('Защищённое хранилище Windows недоступно.');
   const encrypted=(await safeStorage.encryptStringAsync(secret)).toString('base64');
   const sameHost = config.host===host;
-  const next = {...config,host,token:encrypted,authMode,username:user.username,projects:sameHost?config.projects:[],groups:sameHost?config.groups:[],widgets:sameHost?config.widgets:{}};
+  const next = {...config,host,token:encrypted,authMode,username:user.username,projects:sameHost?config.projects:[],groups:sameHost?config.groups:[],widgets:sameHost?config.widgets:{},notifications:sameHost?config.notifications:{},notificationState:sameHost?config.notificationState:{seen:{},delivered:{}}};
   await persist(next);
   epoch++;config=next;token=secret;startupError='';
   if(!sameHost) data.clear();
@@ -182,10 +220,10 @@ register('saveGroup',async input=>{
 });
 register('removeGroup',async key=>{
   const next={...config,groups:config.groups.filter(g=>g.key!==key),widgets:{...config.widgets}};
-  delete next.widgets[key];await persist(next);config=next;widgets.get(key)?.destroy();widgets.delete(key);broadcast();return snapshot();
+  delete next.widgets[key];next.notifications={...config.notifications};delete next.notifications[key];await persist(next);config=next;widgets.get(key)?.destroy();widgets.delete(key);broadcast();return snapshot();
 });
 register('disconnect',async () => {
-  const next={...config,token:'',username:'',projects:[],groups:[],widgets:{},netrcAuto:false};
+  const next={...config,token:'',username:'',projects:[],groups:[],widgets:{},notifications:{},notificationState:{seen:{},delivered:{}},netrcAuto:false};
   await persist(next);epoch++;config=next;token='';data.clear();lastUpdate=null;clearTimeout(timer);
   for(const w of widgets.values())w.destroy();widgets.clear();broadcast();return snapshot();
 });
@@ -205,7 +243,13 @@ register('addProject',async input => {
 register('removeProject',async key => {
   if(config.groups.some(g=>groupProjectKeys(g).includes(key)))throw new Error('Проект входит в группу. Измените её состав перед удалением.');
   const next={...config,projects:config.projects.filter(p=>p.key!==key),widgets:{...config.widgets}};
-  delete next.widgets[key];await persist(next);config=next;widgets.get(key)?.destroy();widgets.delete(key);data.delete(key);broadcast();return snapshot();
+  delete next.widgets[key];next.notifications={...config.notifications};delete next.notifications[key];await persist(next);config=next;widgets.get(key)?.destroy();widgets.delete(key);data.delete(key);broadcast();return snapshot();
+});
+register('setNotifications',async input=>{
+  if(!token)throw new Error('Подключите GitLab, чтобы включить уведомления.');
+  const next=setSubscription(config,input?.key,input?.enabled,data);
+  if(input.enabled)prepareNotifications();
+  await persist(next);config=next;broadcast();return snapshot();
 });
 register('settings',async input => {
   if(!POLL_INTERVALS.includes(input.interval)) throw new Error('Недопустимый интервал.');
@@ -240,15 +284,17 @@ register('windowAction',async (action,event) => {
   }
   if(action==='pin') {w.setAlwaysOnTop(!w.isAlwaysOnTop());const entry=[...widgets].find(([,win])=>win===w);if(entry){config.widgets[entry[0]]={...config.widgets[entry[0]],pinned:w.isAlwaysOnTop()};await persist();}return w.isAlwaysOnTop();}
 });
-register('openExternal',async raw => {
+async function openExternal(raw){
   if(!config.host)throw new Error('Сначала укажите адрес GitLab в настройках.');
   const url=new URL(raw),base=new URL(config.host);
   if(url.protocol!=='https:' || url.origin!==base.origin || url.username || url.password) throw new Error('Разрешены только ссылки подключённого GitLab.');
   await shell.openExternal(url.href);
-});
+}
+register('openExternal',openExternal);
 
 if(single) app.whenReady().then(async () => {
   app.setAppUserModelId('local.pipeline-desk');
+  if(process.platform==='win32')app.setToastActivatorCLSID('{65638BD9-7A4A-489B-B1EE-91CF760D8B52}');
   Menu.setApplicationMenu(null);
   try {
     store=openConfigStore(app.getPath('userData'));

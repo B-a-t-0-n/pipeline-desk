@@ -103,7 +103,7 @@ function createClient(host, token, fetcher = fetch, authMode = 'private') {
       const p = detail.data;
       return {
         pipeline:{id:p.id,status:p.status,ref:p.ref,sha:p.sha,webUrl:p.web_url,duration:p.duration,createdAt:p.created_at,startedAt:p.started_at,finishedAt:p.finished_at,source:p.source},
-        history:history.map(p => ({id:p.id,status:p.status,webUrl:p.web_url})),
+        history:history.map(p => ({id:p.id,status:p.status,ref:p.ref,webUrl:p.web_url})),
         stages:summarizeJobs([...jobs,...bridges])
       };
     }

@@ -1,4 +1,5 @@
 const shapes = {
+  bell:'<path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   x:'<path d="m6 6 12 12M6 18 18 6"/>',
   minus:'<path d="M5 12h14"/>',

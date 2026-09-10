@@ -15,6 +15,8 @@ try{
   assert.equal(await app.evaluate(({app})=>app.isPackaged),true);
   assert.equal(await page.evaluate(async()=> (await window.desk.snapshot()).desktop),true);
   assert.equal((await fs.readFile(path.join(env.PIPELINE_DESK_PROFILE,DATABASE_NAME))).subarray(0,16).toString(),'SQLite format 3\0');
+  assert.equal(await page.evaluate(()=>typeof window.desk.setNotifications),'function');
+  assert.deepEqual(await page.evaluate(async()=>(await window.desk.snapshot()).notifications),{});
   assert.equal(readConfig(env.PIPELINE_DESK_PROFILE).interval,15000);
   await page.locator('#settings-button').click();
   await page.locator('.setup-details summary').click();

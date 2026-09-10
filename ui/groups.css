@@ -6,6 +6,7 @@
 #new-group-button{display:flex;align-items:center;gap:5px;font-size:12px;white-space:nowrap;color:var(--muted);padding:8px 4px}#new-group-button .icon{width:15px;height:15px}
 .collection-context{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 18px}.collection-context h2{font-size:15px;font-weight:600;margin:0;overflow-wrap:anywhere}.collection-context .context-actions{display:flex;gap:6px;flex:none}.collection-context>div:first-child{min-width:0}.collection-error{font-size:11px;color:var(--red);margin:8px 0 0}
 .card-actions{display:flex;gap:2px;margin-right:-7px;margin-top:-3px;align-self:flex-start}.card-actions .icon-button{height:28px;width:26px}.card-actions .icon{height:14px;width:14px}
+.notification-toggle{position:relative;transition:background .15s,color .15s,scale .15s cubic-bezier(.2,0,0,1)}.notification-toggle[aria-pressed=true]{background:var(--blue-bg);color:var(--blue)}.notification-toggle.via-group{color:var(--blue)}.notification-toggle:active{transform:none;scale:.96}.notification-mark{position:absolute;width:4px;height:4px;right:4px;top:4px;border-radius:50%;background:currentColor;pointer-events:none}
 .projects.compact-view{display:flex;flex-direction:column;align-items:stretch;gap:0;border-top:1px solid var(--line)}
 .compact-project{display:flex;align-items:center;gap:10px;min-height:38px;padding:4px 10px;border-bottom:1px solid var(--line);min-width:0;transition:background .18s}
 .compact-project:hover{background:var(--surface)}.compact-project>.status-symbol{height:17px;width:17px}
@@ -31,3 +32,4 @@
 @media(max-width:700px){.collection-bar{gap:8px}.compact-status-label{display:none}.compact-project{gap:9px;padding-inline:5px}.collection-tab{max-width:180px}}
 @media(max-width:460px){.collection-tab{font-size:11px;padding:7px 8px}#new-group-button{font-size:11px}.collection-bar{margin-top:-7px;margin-bottom:18px}.collection-context h2{font-size:13px}.group-modes .filter{font-size:10px;padding:7px 8px}#group-dialog{padding:20px}.group-modes{gap:2px}}
 @media(prefers-reduced-motion:reduce){.compact-project{transition:none}}
+@media(prefers-reduced-motion:reduce){.notification-toggle{transition:none}.notification-toggle:active{scale:1}}

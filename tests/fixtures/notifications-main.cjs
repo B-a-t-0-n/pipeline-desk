@@ -1,0 +1,20 @@
+const {app,Notification,shell}=require('electron');
+app.setName('Pipeline Desk');
+globalThis.toasts=[];globalThis.openedUrls=[];
+globalThis.pipelineStatus=process.env.NOTIFICATION_FIXTURE_STATUS||'running';
+Notification.prototype.show=function(){globalThis.toasts.push(this);};
+shell.openExternal=async url=>{globalThis.openedUrls.push(url);};
+globalThis.fetch=async raw=>{
+  const url=new URL(raw),route=url.pathname;
+  const project=id=>({id,path:id===42?'backend':'frontend',namespace:{full_path:'team'},web_url:`https://git.notifications.invalid/team/${id}`});
+  let body;
+  if(route.endsWith('/user'))body={username:'fixture'};
+  else if(/\/projects\/\d+$/.test(route))body=project(Number(route.split('/').at(-1)));
+  else if(route.endsWith('/pipelines'))body=[{id:100,status:globalThis.pipelineStatus,ref:'main',web_url:'https://git.notifications.invalid/team/backend/-/pipelines/100'}];
+  else if(/\/pipelines\/\d+$/.test(route))body={id:100,status:globalThis.pipelineStatus,ref:'main',web_url:'https://git.notifications.invalid/team/backend/-/pipelines/100'};
+  else if(route.endsWith('/jobs'))body=['quality','build','migrations','deploy'].map((stage,i)=>({id:i+1,name:stage,stage,status:globalThis.pipelineStatus}));
+  else if(route.endsWith('/bridges'))body=[];
+  else throw new Error(`Unexpected fixture route: ${route}`);
+  return new Response(JSON.stringify(body),{status:200,headers:{'content-type':'application/json'}});
+};
+require('../../electron/main.cjs');
