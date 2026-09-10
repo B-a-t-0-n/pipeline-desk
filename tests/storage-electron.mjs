@@ -43,8 +43,16 @@ try{
   assert.equal(stored.interval,60000);assert.equal(stored.widgets['group:migration'].view,'compact');
   assert.equal(stored.widgets['group:migration'].pinned,false);assert.ok(stored.widgets['group:migration'].bounds.height<200);
   assert.equal(await fs.readFile(path.join(profile,'settings.json'),'utf8'),legacy);
-  const restored=await launch();const next=await restored.evaluate(()=>window.desk.snapshot());
+  let restored=await launch();const next=await restored.evaluate(()=>window.desk.snapshot());
   assert.equal(next.connected,true);assert.equal(next.interval,60000);assert.equal(next.widgetOptions['group:migration'].view,'compact');
+  // Simulate abrupt process termination without before-quit or a database checkpoint.
+  const child=app.process(),exited=new Promise(resolve=>child.once('exit',resolve));
+  await promisify(execFile)('taskkill',['/PID',String(child.pid),'/T','/F'],{windowsHide:true,timeout:10000});
+  await exited;app=null;
+  restored=await launch();
+  const afterCrash=await restored.evaluate(()=>window.desk.snapshot());
+  assert.equal(afterCrash.connected,true);assert.equal(afterCrash.interval,60000);
+  assert.equal(afterCrash.widgetOptions['group:migration'].view,'compact');
   await restored.evaluate(()=>window.desk.disconnect());
   assert.equal(readConfig(profile).token,'');
   const db=new DatabaseSync(path.join(profile,DATABASE_NAME),{readOnly:true});
@@ -52,5 +60,5 @@ try{
   await app.close();app=null;
   const disconnected=await launch();assert.equal((await disconnected.evaluate(()=>window.desk.snapshot())).connected,false);
   for(const file of await fs.readdir(profile))if(file.startsWith(DATABASE_NAME))assert.equal((await fs.readFile(path.join(profile,file))).includes(Buffer.from('migration-fixture-token')),false);
-  console.log('PASS: legacy Windows token migrates unchanged into SQLite, decrypts after restart, restores groups/windows/views, saves changes, and stays disconnected despite legacy JSON.');
+  console.log('PASS: legacy Windows token migrates into SQLite, survives restart and abrupt termination, restores groups/windows/views, and stays disconnected despite legacy JSON.');
 }finally{if(app)await app.close().catch(()=>{});}

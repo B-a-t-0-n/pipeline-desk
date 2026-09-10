@@ -40,6 +40,18 @@ test('a failed credential write rolls back settings and the previous token toget
   assert.deepEqual(store.load(),config);db.close();store.close();
 });
 
+test('an empty startup snapshot cannot overwrite a configured profile, including from a second writer',()=>{
+  const dir=profile(),store=openConfigStore(dir),other=openConfigStore(dir),config=fixture();
+  store.save(config);
+  const empty={host:'',token:'',username:'',projects:[],groups:[],widgets:{},interval:15000,netrcAuto:true};
+  try{
+    assert.throws(()=>other.save(empty),/пустыми/);
+    assert.deepEqual(store.load(),config);
+    const disconnected={...config,token:'',projects:[],groups:[],widgets:{},netrcAuto:false};
+    store.save(disconnected);assert.deepEqual(store.load(),disconnected);
+  }finally{other.close();store.close();}
+});
+
 test('malformed legacy data is preserved and does not produce a partial migration',()=>{
   const dir=profile(),file=path.join(dir,'settings.json');fs.writeFileSync(file,'{"projects":');
   assert.throws(()=>openConfigStore(dir));assert.equal(fs.readFileSync(file,'utf8'),'{"projects":');

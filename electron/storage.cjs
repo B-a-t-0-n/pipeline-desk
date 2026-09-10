@@ -35,6 +35,7 @@ function openConfigStore(directory){
       PRAGMA user_version=1;`);
     const insert=db.prepare('INSERT INTO settings (key,value) VALUES (?,?)');
     const putSecret=db.prepare("INSERT INTO credentials (name,ciphertext) VALUES ('gitlab',?)");
+    const savedHost=db.prepare("SELECT value FROM settings WHERE key = 'host'");
     function save(config){
       validate(config);
       const {token='',...settings}=config;
@@ -44,6 +45,11 @@ function openConfigStore(directory){
       const rows=Object.entries(settings).filter(([,value])=>value!==undefined).map(([key,value])=>[key,JSON.stringify(value)]);
       db.exec('BEGIN IMMEDIATE');
       try{
+        // Disconnect keeps the server. A blank startup snapshot must never reset an existing profile.
+        const previousHost=savedHost.get();
+        if(!settings.host&&previousHost&&JSON.parse(previousHost.value)){
+          throw new Error('Сохранение отменено: нельзя заменить настроенный профиль пустыми данными. Перезапустите приложение.');
+        }
         db.exec('DELETE FROM settings; DELETE FROM credentials;');
         for(const [key,value]of rows)insert.run(key,value);
         if(ciphertext)putSecret.run(ciphertext);
