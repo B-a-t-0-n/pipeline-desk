@@ -15,9 +15,46 @@ test('SQLite persists all config fields and stores the encrypted token separatel
   const db=new DatabaseSync(path.join(dir,DATABASE_NAME),{readOnly:true});
   assert.equal(db.prepare("SELECT count(*) AS n FROM settings WHERE key = 'token'").get().n,0);
   assert.equal(db.prepare("SELECT typeof(ciphertext) AS type FROM credentials WHERE name = 'gitlab'").get().type,'blob');
-  assert.equal(db.prepare('PRAGMA user_version').get().user_version,1);
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version,2);
   assert.equal(db.prepare('PRAGMA integrity_check').get().integrity_check,'ok');db.close();
   assert.equal(fs.existsSync(path.join(dir,'settings.json')),false);
+});
+
+test('a reset startup profile recovers the saved connection and configuration',()=>{
+  const dir=profile(),config={...fixture(),notifications:{'group:one':true}};
+  let store=openConfigStore(dir);store.save(config);store.close();
+  const db=new DatabaseSync(path.join(dir,DATABASE_NAME));
+  db.exec('DELETE FROM settings; DELETE FROM credentials;');
+  const insert=db.prepare('INSERT INTO settings(key,value) VALUES (?,?)');
+  for(const [key,value]of Object.entries({host:'',projects:[],groups:[],widgets:{},interval:15000}))insert.run(key,JSON.stringify(value));
+  db.close();
+  store=openConfigStore(dir);
+  try{assert.deepEqual(store.load(),config);}finally{store.close();}
+});
+
+test('a v1 profile upgrades and seeds recovery before any preferences are changed',()=>{
+  const dir=profile(),config=fixture();let store=openConfigStore(dir);store.save(config);store.close();
+  const old=new DatabaseSync(path.join(dir,DATABASE_NAME));old.exec('DROP TABLE profile_recovery; PRAGMA user_version=1;');old.close();
+  store=openConfigStore(dir);assert.deepEqual(store.load(),config);store.close();
+  const db=new DatabaseSync(path.join(dir,DATABASE_NAME));
+  assert.equal(db.prepare('PRAGMA user_version').get().user_version,2);
+  const recovery=db.prepare('SELECT settings,ciphertext FROM profile_recovery').get();
+  assert.equal('token' in JSON.parse(recovery.settings),false);
+  assert.equal(Buffer.from(recovery.ciphertext).toString('base64'),config.token);
+  db.exec('DELETE FROM credentials');db.close();
+  store=openConfigStore(dir);try{assert.deepEqual(store.load(),config);}finally{store.close();}
+});
+
+test('ordinary preference saves cannot erase credentials; explicit logout remains final',()=>{
+  const dir=profile(),config=fixture();let store=openConfigStore(dir);store.save(config);
+  const disconnected={...config,token:'',projects:[],groups:[],widgets:{},netrcAuto:false};
+  assert.throws(()=>store.save(disconnected),/выход/i);
+  assert.deepEqual(store.load(),config);
+  store.save(disconnected,{disconnect:true});store.close();
+  // Even missing primary rows must not resurrect the last connected profile or legacy JSON.
+  fs.writeFileSync(path.join(dir,'settings.json'),JSON.stringify(config));
+  const db=new DatabaseSync(path.join(dir,DATABASE_NAME));db.exec('DELETE FROM settings; DELETE FROM credentials;');db.close();
+  store=openConfigStore(dir);try{assert.deepEqual(store.load(),disconnected);}finally{store.close();}
 });
 
 test('legacy JSON migrates once, remains unchanged, and cannot restore a disconnected token',()=>{
@@ -25,7 +62,7 @@ test('legacy JSON migrates once, remains unchanged, and cannot restore a disconn
   fs.writeFileSync(legacy,original);let store=openConfigStore(dir);
   assert.deepEqual(store.load(),config);
   const disconnected={...config,token:'',projects:[],groups:[],widgets:{},interval:60000};
-  store.save(disconnected);store.close();store=openConfigStore(dir);
+  store.save(disconnected,{disconnect:true});store.close();store=openConfigStore(dir);
   assert.deepEqual(store.load(),disconnected);store.close();
   assert.equal(fs.readFileSync(legacy,'utf8'),original);
   const db=new DatabaseSync(path.join(dir,DATABASE_NAME),{readOnly:true});
@@ -48,7 +85,7 @@ test('an empty startup snapshot cannot overwrite a configured profile, including
     assert.throws(()=>other.save(empty),/пустыми/);
     assert.deepEqual(store.load(),config);
     const disconnected={...config,token:'',projects:[],groups:[],widgets:{},netrcAuto:false};
-    store.save(disconnected);assert.deepEqual(store.load(),disconnected);
+    store.save(disconnected,{disconnect:true});assert.deepEqual(store.load(),disconnected);
   }finally{other.close();store.close();}
 });
 
@@ -62,7 +99,7 @@ test('malformed legacy data is preserved and does not produce a partial migratio
 
 test('a newer schema and a damaged SQLite file are not overwritten from legacy JSON',()=>{
   const dir=profile(),file=path.join(dir,DATABASE_NAME),db=new DatabaseSync(file);
-  db.exec('PRAGMA user_version=2');db.close();
+  db.exec('PRAGMA user_version=3');db.close();
   fs.writeFileSync(path.join(dir,'settings.json'),JSON.stringify(fixture()));
   const before=fs.readFileSync(file);assert.throws(()=>openConfigStore(dir),/новой версией/);assert.deepEqual(fs.readFileSync(file),before);
   const damagedDir=profile(),damagedFile=path.join(damagedDir,DATABASE_NAME);fs.writeFileSync(damagedFile,'broken database');

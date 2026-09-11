@@ -15,6 +15,7 @@ if (!single) app.quit();
 let config = {host:'',token:'',username:'',interval:15000,projects:[],groups:[],widgets:{},notifications:{},notificationState:{seen:{},delivered:{}},bounds:null,netrcPath:'',netrcFailed:false,netrcAuto:true,authMode:'private'};
 let token = '', data = new Map(), overview, tray, timer, refreshing, epoch = 0, lastUpdate = null, startupError = '', quitting = false, store;
 let notificationError='',notificationReady=false;
+let sessionInitialized=false;
 const activeNotifications=new Set();
 const widgets = new Map();
 const pagePath = path.join(__dirname,'../ui/index.html');
@@ -37,9 +38,13 @@ function widgetHeight(key,view){
   const group=config.groups.find(g=>g.key===key),count=group?groupProjectKeys(group).length:2;
   return view==='full'?620:Math.max(widgetMinHeight(key,view),Math.min(600,66+count*(view==='compact'?38:104)));
 }
-async function persist(next = config) {
+async function persist(next = config,options) {
   if(!store)throw new Error('Локальное хранилище недоступно.');
-  store.save(next);
+  store.save(next,options);
+}
+function recordProfileEvent(event,details={}){
+  // Local lifecycle diagnostics contain no token, server address or project names.
+  try{fs.appendFileSync(path.join(app.getPath('userData'),'profile-events.log'),JSON.stringify({time:new Date().toISOString(),version:app.getVersion(),event,...details})+'\n');}catch{}
 }
 function snapshot() {
   return {desktop:true,connected:!!token,host:config.host,username:config.username,interval:config.interval,updating:!!refreshing,lastUpdate,error:startupError||notificationError,notifications:config.notifications,netrcAvailable:!!config.netrcPath,netrcFailed:!!config.netrcFailed,
@@ -129,11 +134,12 @@ function createWindow(key) {
     },250);
   };
   w.on('move',saveBounds);w.on('resize',saveBounds);
+  w.on('session-end',endWindowsSession);
   w.on('closed',() => {clearTimeout(saveTimer);if(widget){widgets.delete(key);broadcast();}});
   if(!widget) w.on('close',event => {if(!quitting){event.preventDefault();w.hide();}});
   return w;
 }
-function showOverview() { if(!overview || overview.isDestroyed()) overview=createWindow(); overview.show();overview.focus(); }
+function showOverview() { if(!sessionInitialized||quitting)return; if(!overview || overview.isDestroyed()) overview=createWindow(); overview.show();overview.focus(); }
 function openWidget(key) {
   if(!config.projects.some(p => p.key===key)&&!config.groups.some(g=>g.key===key) && !(key?.startsWith('demo-') && !token)) throw new Error('Проект или группа не найдены.');
   if(widgets.has(key)){widgets.get(key).show();widgets.get(key).focus();return;}
@@ -224,7 +230,7 @@ register('removeGroup',async key=>{
 });
 register('disconnect',async () => {
   const next={...config,token:'',username:'',projects:[],groups:[],widgets:{},notifications:{},notificationState:{seen:{},delivered:{}},netrcAuto:false};
-  await persist(next);epoch++;config=next;token='';data.clear();lastUpdate=null;clearTimeout(timer);
+  await persist(next,{disconnect:true});epoch++;config=next;token='';data.clear();lastUpdate=null;clearTimeout(timer);
   for(const w of widgets.values())w.destroy();widgets.clear();broadcast();return snapshot();
 });
 register('addProject',async input => {
@@ -300,15 +306,19 @@ if(single) app.whenReady().then(async () => {
     store=openConfigStore(app.getPath('userData'));
     const stored=store.load();
     config={...config,...stored};
+    recordProfileEvent('loaded',{recovered:store.recovered,hasSavedToken:!!config.token,projects:config.projects.length,groups:config.groups.length});
     if(!POLL_INTERVALS.includes(config.interval)) config.interval=15000;
     if(!stored)await persist();
   } catch {
+    recordProfileEvent('storage-unavailable');
     store?.close();store=null;
     dialog.showErrorBox('Pipeline Desk','Не удалось открыть локальную базу настроек. Данные сохранены. Проверьте доступ к папке приложения в AppData и повторите запуск.');
     app.quit();return;
   }
   try{if(config.token)token=(await safeStorage.decryptStringAsync(Buffer.from(config.token,'base64'))).result;}
   catch{startupError='Не удалось расшифровать токен. Подключите GitLab заново.';}
+  recordProfileEvent('session-restored',{connected:!!token,hasSavedToken:!!config.token});
+  sessionInitialized=true;
   overview=createWindow();
   tray=new Tray(nativeImage.createFromPath(path.join(__dirname,'../assets/icon.png')).resize({width:20,height:20}));
   tray.setToolTip('Pipeline Desk');
@@ -320,15 +330,24 @@ if(single) app.whenReady().then(async () => {
   }else refresh();
 });
 app.on('second-instance',showOverview);
-app.on('before-quit',()=>{
-  quitting=true;clearTimeout(timer);
+function saveWindowState(){
   if(!store)return;
   for(const [key,w]of widgets)if(!w.isDestroyed()){
     const bounds=w.getBounds();
     config.widgets[key]={...config.widgets[key],bounds,viewHeights:{...config.widgets[key]?.viewHeights,[widgetView(key)]:bounds.height},pinned:w.isAlwaysOnTop()};
   }
   if(overview&&!overview.isDestroyed())config.bounds=overview.getNormalBounds();
-  try{store.save(config);}catch{dialog.showErrorBox('Pipeline Desk','Не удалось сохранить последние настройки окна. Предыдущие данные в базе сохранены.');}
+  store.save(config);
+}
+function endWindowsSession(){
+  quitting=true;epoch++;clearTimeout(timer);
+  // Windows shutdown/logoff does not guarantee app.before-quit or app.will-quit.
+  try{saveWindowState();recordProfileEvent('windows-session-saved');}catch{recordProfileEvent('windows-session-save-failed');}
+  try{store?.close();}finally{store=null;}
+}
+app.on('before-quit',()=>{
+  quitting=true;clearTimeout(timer);
+  try{saveWindowState();}catch{dialog.showErrorBox('Pipeline Desk','Не удалось сохранить последние настройки окна. Предыдущие данные в базе сохранены.');}
 });
 app.on('will-quit',()=>{store?.close();store=null;});
 app.on('window-all-closed',()=>{});

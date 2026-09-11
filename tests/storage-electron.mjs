@@ -15,7 +15,8 @@ await promisify(execFile)(electronPath,[path.join(root,'tests/fixtures/seed-lega
 const legacy=await fs.readFile(path.join(profile,'settings.json'),'utf8');
 let app;
 async function launch(){
-  app=await electron.launch({args:[root],env});
+  const packaged=process.env.PIPELINE_DESK_PACKAGED==='1';
+  app=await electron.launch({executablePath:packaged?path.join(root,'release/PipelineDesk-win32-x64/PipelineDesk.exe'):undefined,args:packaged?[]:[root],env});
   const page=await app.firstWindow();await page.locator('.pipeline-card,.empty-state').first().waitFor();return page;
 }
 try{
@@ -53,12 +54,27 @@ try{
   const afterCrash=await restored.evaluate(()=>window.desk.snapshot());
   assert.equal(afterCrash.connected,true);assert.equal(afterCrash.interval,60000);
   assert.equal(afterCrash.widgetOptions['group:migration'].view,'compact');
+  // Windows shutdown can skip app.before-quit. Capture the final window change synchronously.
+  const endingBounds=await app.evaluate(({BrowserWindow})=>{
+    const w=BrowserWindow.getAllWindows().find(w=>w.webContents.getURL().includes('widget='));
+    w.setBounds({width:452,height:181});const bounds=w.getBounds();
+    w.emit('session-end',{reasons:['shutdown']});return bounds;
+  });
+  assert.deepEqual(readConfig(profile).widgets['group:migration'].bounds,endingBounds);
+  await app.close();app=null;
+  // Reproduce the lost-session symptom after primary settings/credentials were reset.
+  const reset=new DatabaseSync(path.join(profile,DATABASE_NAME));reset.exec('DELETE FROM settings; DELETE FROM credentials;');reset.close();
+  restored=await launch();
+  const recovered=await restored.evaluate(()=>window.desk.snapshot());
+  assert.equal(recovered.connected,true);assert.equal(recovered.groups[0].name,'Работа');
+  assert.equal(recovered.widgetOptions['group:migration'].view,'compact');
   await restored.evaluate(()=>window.desk.disconnect());
   assert.equal(readConfig(profile).token,'');
   const db=new DatabaseSync(path.join(profile,DATABASE_NAME),{readOnly:true});
-  assert.equal(db.prepare('SELECT count(*) AS n FROM credentials').get().n,0);db.close();
+  assert.equal(db.prepare('SELECT count(*) AS n FROM credentials').get().n,0);
+  assert.equal(db.prepare('SELECT ciphertext FROM profile_recovery WHERE id=1').get().ciphertext,null);db.close();
   await app.close();app=null;
   const disconnected=await launch();assert.equal((await disconnected.evaluate(()=>window.desk.snapshot())).connected,false);
   for(const file of await fs.readdir(profile))if(file.startsWith(DATABASE_NAME))assert.equal((await fs.readFile(path.join(profile,file))).includes(Buffer.from('migration-fixture-token')),false);
-  console.log('PASS: legacy Windows token migrates into SQLite, survives restart and abrupt termination, restores groups/windows/views, and stays disconnected despite legacy JSON.');
+  console.log('PASS: Windows-encrypted token survives restart, abrupt termination, session-end and reset primary records; groups/windows/views recover; explicit logout clears active and recovery credentials.');
 }finally{if(app)await app.close().catch(()=>{});}
