@@ -7,8 +7,11 @@ const {readNetrc} = require('./netrc.cjs');
 const {createGroupService,groupProjectKeys}=require('./groups.cjs');
 const {openConfigStore}=require('./storage.cjs');
 const {resolveProfileDirectory,migrateProfile}=require('./profile.cjs');
+const {createWindowsIntegration}=require('./windows.cjs');
 const {setSubscription,planNotifications}=require('./notifications.cjs');
 const POLL_INTERVALS=[5000,10000,15000,30000,60000];
+const windowsIntegration=process.platform==='win32'?createWindowsIntegration({app,shell}):null;
+windowsIntegration?.initialize();
 
 let profileError,migration;
 try{
@@ -66,9 +69,7 @@ function prepareNotifications(){
   if(!Notification.isSupported())throw new Error('Системные уведомления недоступны.');
   if(notificationReady)return;
   if(process.platform==='win32'&&app.isPackaged&&!process.env.PIPELINE_DESK_TEST){
-    const shortcut=path.join(app.getPath('appData'),'Microsoft/Windows/Start Menu/Programs/Pipeline Desk.lnk');
-    fs.mkdirSync(path.dirname(shortcut),{recursive:true});
-    if(!shell.writeShortcutLink(shortcut,'create',{target:process.execPath,cwd:path.dirname(process.execPath),appUserModelId:'local.pipeline-desk',toastActivatorClsid:app.toastActivatorCLSID,description:'Pipeline Desk',icon:process.execPath,iconIndex:0}))throw new Error('Не удалось включить уведомления Windows. Повторите попытку.');
+    windowsIntegration.ensureShortcut();
   }
   notificationReady=true;notificationError='';
 }
@@ -129,6 +130,7 @@ function createWindow(key) {
   const group=isGroupKey(key),view=widgetView(key);
   const w = new BrowserWindow({...visibleBounds(widget?config.widgets[key]?.bounds:config.bounds,widget?(group?440:388):1100,widget?widgetHeight(key,view):790),minWidth:widget?330:660,minHeight:widget?widgetMinHeight(key,view):500,show:false,frame:false,backgroundColor:'#141619',title:widget?'Pipeline Desk · Widget':'Pipeline Desk',icon:path.join(__dirname,'../assets/icon.ico'),alwaysOnTop:widget?config.widgets[key]?.pinned!==false:false,autoHideMenuBar:true,
     webPreferences:{preload:path.join(__dirname,'preload.cjs'),contextIsolation:true,nodeIntegration:false,sandbox:true,backgroundThrottling:false}});
+  windowsIntegration?.configureWindow(w);
   w.webContents.setWindowOpenHandler(() => ({action:'deny'}));
   w.webContents.on('will-navigate',e => e.preventDefault());
   w.webContents.session.setPermissionRequestHandler((_,__,callback) => callback(false));
@@ -310,8 +312,7 @@ async function openExternal(raw){
 register('openExternal',openExternal);
 
 if(single) app.whenReady().then(async () => {
-  app.setAppUserModelId('local.pipeline-desk');
-  if(process.platform==='win32')app.setToastActivatorCLSID('{65638BD9-7A4A-489B-B1EE-91CF760D8B52}');
+  if(!process.env.PIPELINE_DESK_TEST)try{windowsIntegration?.ensureShortcut();}catch{recordProfileEvent('windows-shortcut-failed');}
   Menu.setApplicationMenu(null);
   try {
     if(profileError)throw profileError;
