@@ -14,7 +14,9 @@ let app;
 const errors=[];
 async function launch(){
   app=await electron.launch({args:[root],env});
-  const page=await app.firstWindow();page.on('pageerror',e=>errors.push(e.message));
+  await app.firstWindow();
+  await expect.poll(()=>app.windows().some(w=>w.url().endsWith('/ui/index.html'))).toBe(true);
+  const page=app.windows().find(w=>w.url().endsWith('/ui/index.html'));page.on('pageerror',e=>errors.push(e.message));
   await page.locator('.pipeline-card').first().waitFor();return page;
 }
 try{

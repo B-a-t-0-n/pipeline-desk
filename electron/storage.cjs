@@ -89,8 +89,20 @@ function openConfigStore(directory){
     return {load:()=>read(db),save,recovered,close:()=>db.close()};
   }catch(error){db.close();throw error;}
 }
-function readConfig(directory){
+function readConfig(directory,{recover=false}={}){
   const db=new DatabaseSync(path.join(directory,DATABASE_NAME),{readOnly:true,timeout:3000});
-  try{return read(db);}finally{db.close();}
+  try{
+    db.exec('BEGIN');
+    const version=db.prepare('PRAGMA user_version').get().user_version;
+    if(version>2)throw new Error('База настроек создана более новой версией приложения.');
+    let fallback,stored;
+    if(recover&&version===2){
+      const row=db.prepare('SELECT settings,ciphertext FROM profile_recovery WHERE id=1').get();
+      if(row){fallback={...JSON.parse(row.settings),token:row.ciphertext?Buffer.from(row.ciphertext).toString('base64'):''};validate(fallback);}
+    }
+    try{stored=read(db);}catch(error){if(!fallback)throw error;}
+    if(fallback&&(!stored||(!stored.host&&fallback.host)||(!stored.token&&fallback.token)))stored=fallback;
+    db.exec('COMMIT');return stored;
+  }finally{db.close();}
 }
 module.exports={openConfigStore,readConfig,DATABASE_NAME};

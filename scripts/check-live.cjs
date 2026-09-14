@@ -1,10 +1,10 @@
 // Explicit, read-only smoke check using the current Windows user's saved connection.
 const {app,safeStorage}=require('electron');
-const path=require('node:path');
+const {resolveProfileDirectory}=require('../electron/profile.cjs');
 const {readConfig}=require('../electron/storage.cjs');
 const {createClient,normalizeHost}=require('../electron/gitlab.cjs');
 app.setName('Pipeline Desk');
-app.setPath('userData',path.join(process.env.APPDATA,'Pipeline Desk'));
+app.setPath('userData',resolveProfileDirectory({home:app.getPath('home'),override:process.env.PIPELINE_DESK_PROFILE}));
 app.whenReady().then(async()=>{
   let step='settings';
   try{

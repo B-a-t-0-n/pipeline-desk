@@ -6,12 +6,23 @@ const {normalizeHost,parseProject,createClient} = require('./gitlab.cjs');
 const {readNetrc} = require('./netrc.cjs');
 const {createGroupService,groupProjectKeys}=require('./groups.cjs');
 const {openConfigStore}=require('./storage.cjs');
+const {resolveProfileDirectory,migrateProfile}=require('./profile.cjs');
 const {setSubscription,planNotifications}=require('./notifications.cjs');
 const POLL_INTERVALS=[5000,10000,15000,30000,60000];
 
-if (process.env.PIPELINE_DESK_PROFILE) app.setPath('userData', process.env.PIPELINE_DESK_PROFILE);
+let profileError,migration;
+try{
+  const directory=resolveProfileDirectory({home:app.getPath('home'),override:process.env.PIPELINE_DESK_PROFILE});
+  fs.mkdirSync(directory,{recursive:true});app.setPath('userData',directory);
+}catch(error){profileError=error;}
 const single = app.requestSingleInstanceLock();
 if (!single) app.quit();
+if(single&&!profileError&&!process.env.PIPELINE_DESK_PROFILE){
+  try{migration=migrateProfile(app.getPath('userData'),{
+    legacyDirectory:path.join(app.getPath('appData'),'Pipeline Desk'),
+    packagesDirectory:path.join(app.getPath('home'),'AppData/Local/Packages')
+  });}catch(error){profileError=error;}
+}
 let config = {host:'',token:'',username:'',interval:15000,projects:[],groups:[],widgets:{},notifications:{},notificationState:{seen:{},delivered:{}},bounds:null,netrcPath:'',netrcFailed:false,netrcAuto:true,authMode:'private'};
 let token = '', data = new Map(), overview, tray, timer, refreshing, epoch = 0, lastUpdate = null, startupError = '', quitting = false, store;
 let notificationError='',notificationReady=false;
@@ -303,6 +314,8 @@ if(single) app.whenReady().then(async () => {
   if(process.platform==='win32')app.setToastActivatorCLSID('{65638BD9-7A4A-489B-B1EE-91CF760D8B52}');
   Menu.setApplicationMenu(null);
   try {
+    if(profileError)throw profileError;
+    if(migration)recordProfileEvent('profile-migrated',migration);
     store=openConfigStore(app.getPath('userData'));
     const stored=store.load();
     config={...config,...stored};
@@ -312,7 +325,7 @@ if(single) app.whenReady().then(async () => {
   } catch {
     recordProfileEvent('storage-unavailable');
     store?.close();store=null;
-    dialog.showErrorBox('Pipeline Desk','Не удалось открыть локальную базу настроек. Данные сохранены. Проверьте доступ к папке приложения в AppData и повторите запуск.');
+    dialog.showErrorBox('Pipeline Desk','Не удалось открыть или перенести локальную базу настроек. Исходные данные сохранены. Проверьте доступ к папке профиля и повторите запуск.\n\n'+app.getPath('userData'));
     app.quit();return;
   }
   try{if(config.token)token=(await safeStorage.decryptStringAsync(Buffer.from(config.token,'base64'))).result;}

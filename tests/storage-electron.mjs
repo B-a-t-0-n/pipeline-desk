@@ -1,4 +1,5 @@
 import {_electron as electron} from 'playwright';
+import {expect} from '@playwright/test';
 import electronPath from 'electron';
 import {execFile} from 'node:child_process';
 import {promisify} from 'node:util';
@@ -17,7 +18,10 @@ let app;
 async function launch(){
   const packaged=process.env.PIPELINE_DESK_PACKAGED==='1';
   app=await electron.launch({executablePath:packaged?path.join(root,'release/PipelineDesk-win32-x64/PipelineDesk.exe'):undefined,args:packaged?[]:[root],env});
-  const page=await app.firstWindow();await page.locator('.pipeline-card,.empty-state').first().waitFor();return page;
+  await app.firstWindow();
+  await expect.poll(()=>app.windows().some(w=>w.url().endsWith('/ui/index.html'))).toBe(true);
+  const page=app.windows().find(w=>w.url().endsWith('/ui/index.html'));
+  await page.locator('.pipeline-card,.empty-state').first().waitFor();return page;
 }
 try{
   const page=await launch();
